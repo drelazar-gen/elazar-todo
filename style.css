@@ -73,7 +73,22 @@ body {
 }
 .app-header h1 { font-size: 22px; margin: 0; }
 .updated-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.status-bar { font-size: 12px; color: var(--accent); margin-top: 4px; font-weight: 600; }
 .header-actions { display: flex; gap: 8px; }
+
+.quick-add-card { margin: 4px 4px 22px; }
+.quick-add-row { display: flex; gap: 8px; }
+.quick-add-row input {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--card);
+}
+.quick-add-row button { flex-shrink: 0; }
+.event-hint { font-size: 12px; color: var(--text-dim); margin: 8px 4px 0; line-height: 1.4; }
 
 .ghost-btn {
   background: transparent;

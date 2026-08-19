@@ -27,12 +27,21 @@
       <div>
         <h1>To-Do List</h1>
         <div id="updated-label" class="updated-label"></div>
+        <div id="status-bar" class="status-bar"></div>
       </div>
       <div class="header-actions">
         <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
         <button id="logout-btn" class="ghost-btn">Log out</button>
       </div>
     </header>
+
+    <div class="quick-add-card">
+      <form id="quick-add-form" class="quick-add-row">
+        <input type="text" id="quick-add-input" placeholder="Add an item… (start with EVENT: to put it on your calendar)" autocomplete="off" />
+        <button type="submit" class="primary-btn">Add</button>
+      </form>
+      <p class="event-hint">Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a note/context field, a link, or to mark something urgent.</p>
+    </div>
 
     <main id="sections-container" class="sections-container"></main>
 
@@ -50,7 +59,7 @@
       <label>Title</label>
       <textarea id="field-text" rows="2" placeholder="What needs to happen?"></textarea>
 
-      <label>Details (optional)</label>
+      <label>Note / context (optional)</label>
       <textarea id="field-meta" rows="2" placeholder="Extra context, amounts, dates..."></textarea>
 
       <label>Link (optional)</label>

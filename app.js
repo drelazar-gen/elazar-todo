@@ -10,8 +10,17 @@ const PREFERRED_SECTION_ORDER = [
   'ADDED BY YOU',
 ];
 
-let state = { items: [], showCompleted: false };
+let state = { items: [], showCompleted: false, status: {} };
 let editingRecordId = null;
+
+function formatCheckTime(iso) {
+  if (!iso) return 'not yet checked';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'not yet checked';
+  const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const timePart = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${datePart}, ${timePart}`;
+}
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -233,7 +242,12 @@ async function deleteModal() {
 async function loadItems() {
   const data = await api('/api/items');
   state.items = data.items;
-  $('#updated-label').textContent = `${state.items.length} item${state.items.length === 1 ? '' : 's'} · updated ${new Date().toLocaleTimeString()}`;
+  state.status = data.status || {};
+  const now = new Date();
+  $('#updated-label').textContent =
+    `Live checklist — last refreshed ${now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${state.items.length} item${state.items.length === 1 ? '' : 's'}`;
+  $('#status-bar').textContent =
+    `WhatsApp check: ${formatCheckTime(state.status.whatsapp)}  ·  Messages check: ${formatCheckTime(state.status.messages)}`;
   render();
 }
 
@@ -269,6 +283,27 @@ $('#show-completed-toggle').addEventListener('click', () => {
   state.showCompleted = !state.showCompleted;
   $('#show-completed-toggle').textContent = state.showCompleted ? 'Hide completed' : 'Show completed';
   render();
+});
+
+$('#quick-add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#quick-add-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  try {
+    await api('/api/items', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', text, section: 'ADDED BY YOU' }),
+    });
+    input.value = '';
+    await loadItems();
+  } catch (err) {
+    alert('Could not add: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
 
 $('#add-fab').addEventListener('click', () => openModal(null));
