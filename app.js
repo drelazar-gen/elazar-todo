@@ -10,17 +10,14 @@ const PREFERRED_SECTION_ORDER = [
   'ADDED BY YOU',
 ];
 
+// Heartbeats are anchored to :25 and :55 UTC each hour (~every 30 min combined).
+const SYNC_CADENCE_MINUTES = 30;
+const SYNC_GRACE_MINUTES = 5;
+const BACKGROUND_REFRESH_MS = 45000;
+
 let state = { items: [], showCompleted: false, status: {} };
 let editingRecordId = null;
-
-function formatCheckTime(iso) {
-  if (!iso) return 'not yet checked';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return 'not yet checked';
-  const datePart = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  const timePart = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  return `${datePart}, ${timePart}`;
-}
+let lastSuccessfulSync = null;
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -55,6 +52,81 @@ function sectionRank(name) {
   const idx = PREFERRED_SECTION_ORDER.indexOf((name || '').toUpperCase());
   return idx === -1 ? PREFERRED_SECTION_ORDER.length : idx;
 }
+
+/* ---------------- Sync / status pills ---------------- */
+
+function formatPillTime(date, includeDate) {
+  const timePart = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (!includeDate) return timePart;
+  const datePart = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `${datePart}, ${timePart}`;
+}
+
+function sameDay(a, b) {
+  return a.toDateString() === b.toDateString();
+}
+
+// Most recent :25 or :55 UTC mark that has already passed — the last time
+// a heartbeat check-in was expected to have run.
+function lastScheduledMark(now) {
+  const mark = new Date(now.getTime());
+  mark.setUTCSeconds(0, 0);
+  const minutes = mark.getUTCMinutes();
+  if (minutes >= 55) {
+    mark.setUTCMinutes(55);
+  } else if (minutes >= 25) {
+    mark.setUTCMinutes(25);
+  } else {
+    mark.setUTCHours(mark.getUTCHours() - 1);
+    mark.setUTCMinutes(55);
+  }
+  return mark;
+}
+
+function setSyncPill(healthy, detail) {
+  const el = $('#sync-pill');
+  if (!el) return;
+  if (healthy) {
+    el.className = 'pill pill-lg pill-green';
+    el.textContent = 'Live sync connected — changes save instantly';
+  } else {
+    el.className = 'pill pill-lg pill-red';
+    el.textContent = detail || 'Sync issue — retrying…';
+  }
+}
+
+function updateChannelPill(el, label, iso) {
+  if (!el) return;
+  const now = new Date();
+
+  if (!iso) {
+    el.className = 'pill pill-sm pill-red';
+    el.textContent = `${label} — no check-in yet`;
+    return;
+  }
+
+  const last = new Date(iso);
+  const scheduled = lastScheduledMark(now);
+  const graceMs = SYNC_GRACE_MINUTES * 60 * 1000;
+  const healthy = last.getTime() >= scheduled.getTime() - graceMs;
+
+  if (healthy) {
+    el.className = 'pill pill-sm pill-green';
+    el.textContent = `${label} — synced ${formatPillTime(last, !sameDay(last, now))}`;
+  } else {
+    el.className = 'pill pill-sm pill-red';
+    const lastStr = formatPillTime(last, !sameDay(last, now));
+    const expStr = formatPillTime(scheduled, !sameDay(scheduled, now));
+    el.textContent = `${label} — offline · last ${lastStr} · expected ${expStr}`;
+  }
+}
+
+function refreshStatusPills() {
+  updateChannelPill($('#whatsapp-pill'), 'WhatsApp', state.status.whatsapp);
+  updateChannelPill($('#messages-pill'), 'Messages', state.status.messages);
+}
+
+/* ---------------- Rendering ---------------- */
 
 function render() {
   const container = $('#sections-container');
@@ -134,12 +206,10 @@ function renderItem(item) {
   text.appendChild(document.createTextNode(item.text));
   body.appendChild(text);
 
-  if (item.meta) {
-    const meta = document.createElement('div');
-    meta.className = 'item-meta';
-    meta.textContent = item.meta;
-    body.appendChild(meta);
-  }
+  const noteWrap = document.createElement('div');
+  noteWrap.className = 'item-note-wrap';
+  renderNoteWrap(item, noteWrap);
+  body.appendChild(noteWrap);
 
   if (item.link) {
     const link = document.createElement('a');
@@ -157,6 +227,96 @@ function renderItem(item) {
   row.addEventListener('click', () => openModal(item));
 
   return row;
+}
+
+// Renders either the existing note (with an "Edit note" affordance) or a
+// "+ Add note / context" button — right on the card, no need to open the
+// full editor first. Clicking either swaps in an inline textarea + Save/Cancel.
+function renderNoteWrap(item, container) {
+  container.innerHTML = '';
+
+  if (item.meta) {
+    const metaRow = document.createElement('div');
+    metaRow.className = 'item-meta-row';
+
+    const meta = document.createElement('div');
+    meta.className = 'item-meta';
+    meta.textContent = item.meta;
+    metaRow.appendChild(meta);
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'note-edit-btn';
+    editBtn.textContent = 'Edit note';
+    editBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openInlineNoteEditor(item, container);
+    });
+    metaRow.appendChild(editBtn);
+
+    container.appendChild(metaRow);
+  } else {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'add-note-btn';
+    addBtn.textContent = '+ Add note / context';
+    addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openInlineNoteEditor(item, container);
+    });
+    container.appendChild(addBtn);
+  }
+}
+
+function openInlineNoteEditor(item, container) {
+  container.innerHTML = '';
+  container.addEventListener('click', (e) => e.stopPropagation());
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'inline-note-input';
+  textarea.rows = 2;
+  textarea.placeholder = 'Extra context, amounts, dates...';
+  textarea.value = item.meta || '';
+
+  const actions = document.createElement('div');
+  actions.className = 'inline-note-actions';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'ghost-btn small-btn';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => renderNoteWrap(item, container));
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'primary-btn small-btn';
+  saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', async () => {
+    const val = textarea.value.trim();
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    try {
+      const result = await api('/api/items', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'update', recordId: item.recordId, meta: val }),
+      });
+      const idx = state.items.findIndex((it) => it.recordId === item.recordId);
+      if (idx !== -1) state.items[idx] = result.item;
+      // Full re-render so the row's other handlers (open-modal, checkbox)
+      // pick up the fresh item instead of a stale closure.
+      render();
+    } catch (err) {
+      alert('Could not save note: ' + err.message);
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+    }
+  });
+
+  actions.appendChild(cancelBtn);
+  actions.appendChild(saveBtn);
+  container.appendChild(textarea);
+  container.appendChild(actions);
+  textarea.focus();
 }
 
 async function toggleItem(item, checked) {
@@ -243,12 +403,29 @@ async function loadItems() {
   const data = await api('/api/items');
   state.items = data.items;
   state.status = data.status || {};
-  const now = new Date();
+  lastSuccessfulSync = new Date();
+
   $('#updated-label').textContent =
-    `Live checklist — last refreshed ${now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${state.items.length} item${state.items.length === 1 ? '' : 's'}`;
-  $('#status-bar').textContent =
-    `WhatsApp check: ${formatCheckTime(state.status.whatsapp)}  ·  Messages check: ${formatCheckTime(state.status.messages)}`;
+    `Live checklist — last refreshed ${lastSuccessfulSync.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${formatPillTime(lastSuccessfulSync, false)} · ${state.items.length} item${state.items.length === 1 ? '' : 's'}`;
+
+  setSyncPill(true);
+  refreshStatusPills();
   render();
+}
+
+// Silent background poll so the "live sync" and channel pills reflect reality
+// without the user needing to refresh the page.
+async function backgroundRefresh() {
+  try {
+    await loadItems();
+  } catch (err) {
+    setSyncPill(
+      false,
+      lastSuccessfulSync
+        ? `Sync issue — last connected ${formatPillTime(lastSuccessfulSync, !sameDay(lastSuccessfulSync, new Date()))}`
+        : 'Sync issue — could not connect'
+    );
+  }
 }
 
 async function init() {
@@ -258,6 +435,9 @@ async function init() {
   } catch (e) {
     showLogin();
   }
+  setInterval(backgroundRefresh, BACKGROUND_REFRESH_MS);
+  // Keep the "offline / expected" pill wording fresh even between refreshes.
+  setInterval(refreshStatusPills, 60000);
 }
 
 $('#login-form').addEventListener('submit', async (e) => {

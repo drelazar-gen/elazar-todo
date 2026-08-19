@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Elazar — To-Do List</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -11,6 +14,7 @@
   <!-- Password gate -->
   <div id="login-screen" class="login-screen">
     <div class="login-card">
+      <div class="login-mark">E</div>
       <h1>Elazar — To-Do List</h1>
       <p class="login-sub">Enter password to continue</p>
       <form id="login-form">
@@ -24,14 +28,23 @@
   <!-- Main app -->
   <div id="app" class="app hidden">
     <header class="app-header">
-      <div>
-        <h1>To-Do List</h1>
-        <div id="updated-label" class="updated-label"></div>
-        <div id="status-bar" class="status-bar"></div>
+      <div class="header-top">
+        <div>
+          <h1>To-Do List</h1>
+          <div id="updated-label" class="updated-label"></div>
+        </div>
+        <div class="header-actions">
+          <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
+          <button id="logout-btn" class="ghost-btn">Log out</button>
+        </div>
       </div>
-      <div class="header-actions">
-        <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
-        <button id="logout-btn" class="ghost-btn">Log out</button>
+
+      <div class="status-pills">
+        <div id="sync-pill" class="pill pill-lg pill-green">Live sync connected — changes save instantly</div>
+        <div class="pill-row">
+          <div id="whatsapp-pill" class="pill pill-sm pill-green">WhatsApp — checking…</div>
+          <div id="messages-pill" class="pill pill-sm pill-green">Messages — checking…</div>
+        </div>
       </div>
     </header>
 
@@ -40,7 +53,7 @@
         <input type="text" id="quick-add-input" placeholder="Add an item… (start with EVENT: to put it on your calendar)" autocomplete="off" />
         <button type="submit" class="primary-btn">Add</button>
       </form>
-      <p class="event-hint">Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a note/context field, a link, or to mark something urgent.</p>
+      <p class="event-hint">Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a full editor with a link and urgent flag.</p>
     </div>
 
     <main id="sections-container" class="sections-container"></main>
