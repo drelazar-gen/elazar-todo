@@ -1,470 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Elazar — Daily To-Do</title>
-<style>
-  :root{
-    --bg:#f7f7f5; --card:#ffffff; --ink:#1f2328; --sub:#6b7280;
-    --accent:#2563eb; --urgent:#dc2626; --urgent-bg:#fef2f2;
-    --done:#16a34a; --border:#e5e7eb; --chip:#eef2ff;
-  }
-  @media (prefers-color-scheme: dark){
-    :root{
-      --bg:#15171a; --card:#1f2328; --ink:#e8eaed; --sub:#9aa0a6;
-      --accent:#60a5fa; --urgent:#f87171; --urgent-bg:#2a1717;
-      --done:#4ade80; --border:#33383e; --chip:#22283a;
-    }
-  }
-  *{box-sizing:border-box;}
-  body{
-    margin:0; padding:32px 16px; background:var(--bg); color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  }
-  .wrap{max-width:720px;margin:0 auto;}
-  header{margin-bottom:24px;}
-  h1{font-size:22px;margin:0 0 4px;}
-  .sub{color:var(--sub);font-size:14px;}
-  .note{
-    background:var(--chip); border:1px solid var(--border); border-radius:10px;
-    padding:12px 16px; font-size:13px; color:var(--sub); margin:16px 0 28px; line-height:1.5;
-  }
-  section{margin-bottom:28px;}
-  .section-title{
-    display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600;
-    text-transform:uppercase; letter-spacing:.04em; color:var(--sub); margin-bottom:10px;
-  }
-  .count{
-    background:var(--chip); color:var(--accent); border-radius:999px; padding:2px 9px;
-    font-size:12px; font-weight:600;
-  }
-  ul{list-style:none;margin:0;padding:0;}
-  li{
-    display:flex; align-items:flex-start; gap:12px; background:var(--card);
-    border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:8px;
-  }
-  li.urgent{border-color:var(--urgent); background:var(--urgent-bg);}
-  input[type=checkbox]{
-    width:18px;height:18px; margin-top:2px; accent-color:var(--done); flex-shrink:0; cursor:pointer;
-  }
-  .item-text{flex:1; font-size:14.5px; line-height:1.45;}
-  .item-title{font-weight:600;}
-  .item-meta{color:var(--sub); font-size:12.5px; margin-top:2px;}
-  label.checked .item-title{text-decoration:line-through; color:var(--sub);}
-  .take-there{display:inline-block; margin-top:6px; font-size:12.5px; font-weight:600; color:var(--accent); text-decoration:none;}
-  .take-there:hover{text-decoration:underline;}
-  .take-there + .take-there{margin-left:14px;}
-  footer{color:var(--sub); font-size:12.5px; text-align:center; margin-top:32px;}
-  .sync-banner{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:8px; margin-bottom:16px;}
-  .sync-banner.off{background:var(--urgent-bg); color:var(--urgent);}
-  .sync-banner.on{background:#ecfdf5; color:var(--done);}
-  @media (prefers-color-scheme: dark){ .sync-banner.on{background:#0f2a1c;} }
-  .check-status{display:flex; flex-wrap:wrap; gap:8px; margin:-8px 0 16px;}
-  .check-pill{font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:999px; background:var(--chip); color:var(--sub);}
-  .check-pill.ok{background:#ecfdf5; color:var(--done);}
-  @media (prefers-color-scheme: dark){ .check-pill.ok{background:#0f2a1c;} }
-  .check-pill.stale{background:var(--urgent-bg); color:var(--urgent);}
-  .check-pill.unknown{background:var(--chip); color:var(--sub);}
-  .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex-shrink:0;}
-  #notes-textarea{
-    width:100%; min-height:90px; resize:vertical; border:1px solid var(--border); border-radius:10px;
-    background:var(--card); color:var(--ink); font:inherit; font-size:13.5px; padding:12px 14px; line-height:1.5;
-  }
-  .notes-status{font-size:11.5px; color:var(--sub); margin-top:6px; text-align:right; min-height:14px;}
-  .item-note-wrap{margin-top:6px;}
-  .note-toggle{
-    background:none; border:none; padding:0; margin:0; cursor:pointer; font:inherit;
-    font-size:12px; font-weight:600; color:var(--sub); text-decoration:underline dotted;
-  }
-  .note-toggle:hover{color:var(--accent);}
-  .item-note{
-    display:block; width:100%; min-height:50px; resize:vertical; margin-top:6px;
-    border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--ink);
-    font:inherit; font-size:13px; padding:8px 10px; line-height:1.4;
-  }
-  #gate-overlay{
-    position:fixed; inset:0; z-index:9999; background:var(--bg); color:var(--ink);
-    display:flex; align-items:center; justify-content:center; padding:24px;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  }
-  #gate-box{max-width:320px; width:100%; text-align:center;}
-  #gate-box h2{font-size:18px; margin:0 0 6px;}
-  #gate-box p{color:var(--sub); font-size:13px; margin:0 0 18px;}
-  #gate-input{
-    width:100%; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--ink);
-    font:inherit; font-size:15px; padding:10px 12px; text-align:center; letter-spacing:1px;
-  }
-  #gate-submit{
-    width:100%; margin-top:10px; border:none; border-radius:10px; background:var(--accent); color:#fff;
-    font:inherit; font-size:14px; font-weight:600; padding:10px 12px; cursor:pointer;
-  }
-  #gate-error{color:var(--urgent); font-size:12.5px; min-height:16px; margin-top:8px;}
-</style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Elazar — To-Do List</title>
+<link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-<div id="gate-overlay">
-  <div id="gate-box">
-    <h2>Elazar's Daily To-Do</h2>
-    <p>Enter the passcode to view the checklist.</p>
-    <input id="gate-input" type="password" placeholder="Passcode" autocomplete="off">
-    <button id="gate-submit" type="button">Unlock</button>
-    <div id="gate-error"></div>
-  </div>
-</div>
-<div class="wrap">
-  <header>
-    <h1>Elazar's Daily To-Do</h1>
-    <div class="sub" id="snapshot-sub">Loading latest data…</div>
-  </header>
 
-  <div id="sync-banner" class="sync-banner off"><span class="dot"></span><span id="sync-banner-text">Live sync not connected yet — checking a box here won't save. Ask your assistant to finish wiring up the backend.</span></div>
-  <div class="check-status">
-    <span id="status-whatsapp" class="check-pill unknown">WhatsApp check: —</span>
-    <span id="status-messages" class="check-pill unknown">Messages check: —</span>
+  <!-- Password gate -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <h1>Elazar — To-Do List</h1>
+      <p class="login-sub">Enter password to continue</p>
+      <form id="login-form">
+        <input type="password" id="password-input" placeholder="Password" autocomplete="current-password" autofocus />
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="login-error" class="login-error"></p>
+    </div>
   </div>
 
-  <div class="note">
-    <b>How updates work:</b> once live sync is connected, checking a box or editing Notes here saves instantly to the backend — no waiting on an hourly sync. The Google Doc "Elazar Daily To-Do List" stays in sync too: your assistant reconciles it against this backend periodically, so editing the Doc directly still works, just with up to an hour of lag versus checking things off here. Where a direct link to the source exists, a "Take me there →" appears under the item — a few are one-time/click-tracked links from the original email and can expire; tell me if one stops working and I'll re-find it.
+  <!-- Main app -->
+  <div id="app" class="app hidden">
+    <header class="app-header">
+      <div>
+        <h1>To-Do List</h1>
+        <div id="updated-label" class="updated-label"></div>
+      </div>
+      <div class="header-actions">
+        <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
+        <button id="logout-btn" class="ghost-btn">Log out</button>
+      </div>
+    </header>
+
+    <main id="sections-container" class="sections-container"></main>
+
+    <button id="add-fab" class="add-fab" title="Add item">+</button>
   </div>
 
-  <section>
-    <div class="section-title">Needs action today / this week <span class="count">10</span></div>
-    <ul>
-      <li><input type="checkbox" id="c0" checked><label for="c0" class="item-text checked"><div class="item-title done">RESOLVED: CE Broker payment</div><div class="item-meta">Retried successfully — $39.99 paid Aug 18, covers Aug 15, 2026–Aug 15, 2027 (receipt #2731-9995)</div></label></li>
-      <li class="urgent"><input type="checkbox" id="c1"><label for="c1" class="item-text"><div class="item-title">Complete outstanding Chai Center forms for Raphael</div><div class="item-meta">Diaper Cream/Sunscreen, Safe Sleep, T-Shirts — via Playground portal (links go through esteek317@gmail.com's login)</div><a class="take-there" href="https://url3653.tryplayground.com/ls/click?upn=u001.Gt0-2BDVEWwfh-2F8kMysrpQqI-2Bn9-2BMr7c62tRB-2BDqw4MtVtPA1dAgaOfEmpY6imJ7qkbgsV_fPgfYNyUpLXV4hNmsEZ1icmdkSyyu4HhbZX-2FM0HEMyHSx15JHegZelrUkzmM84nC2lwpl-2BIy0uS5IMRA4kFXVdABEUfLTQCS8va2CJAbXuUc-2BbfJQM7YrUq8JH-2Ft5xkSnejvDmqq3kxdTfEALPZLFV0vAjGg-2Ff6VjAG7dfogJs4tg5anGqQN8eDYm-2F9fvouc-2B5Em0Qi-2FR39ZrmNfWiYLZdiEfbIdrW6-2FzFD1jcyn7SwcUzXZ4VPyBe2vsV8ct4oFKD2UvV4KxrES6Psr1WVUxzofrZ8FJ1Ir7NFFyyYkGpOkg1p7L9Th-2BSozXnoMoT81cn9XkgxRsieyMLWsohLc7oeVeZnLzRG5XnQBYI-2BnktLoHq-2BYiQxqxSfoVFYBt9e0uEYb5DhcM80kptak-2FrOQcz5kQk5tpwW-2FnKQZvINd2NkB86T43rWY-2Fu-2Br19JaDlQ63K9MWcb6TtXe8TIJdkfzyQLthwX3dTVwhgQV-2BY8d7Uuj0jgD6rYVS-2FO-2F1gAR4BpwXGe8FLbOjzVMYGGXacfVzQ-3D-3D" target="_blank" rel="noopener">Diaper Cream/Sunscreen →</a><a class="take-there" href="https://url3653.tryplayground.com/ls/click?upn=u001.Gt0-2BDVEWwfh-2F8kMysrpQqI-2Bn9-2BMr7c62tRB-2BDqw4MtVtPA1dAgaOfEmpY6imJ7qkU949_fPgfYNyUpLXV4hNmsEZ1icmdkSyyu4HhbZX-2FM0HEMyHSx15JHegZelrUkzmM84nC2lwpl-2BIy0uS5IMRA4kFXVdABEUfLTQCS8va2CJAbXuUc-2BbfJQM7YrUq8JH-2Ft5xkSnejvDmqq3kxdTfEALPZLFV0vAjGg-2Ff6VjAG7dfogJs4tg5anGqQN8eDYm-2F9fvouc-2B5Em0Qi-2FR39ZrmNfWiYLZdiEfbIdrW6-2FzFD1jcyn7SwcUzXZ4VPyBe2vsV8ct4oFKD2UvV4KxrES6Psr1WVUxzofrZ8FJ1Ir7NFFyyYkGpOkg1p7L9Th-2BSozXnoMoT81cn9XkgxRsieyMLWsohLc7vI7zCixg4PzTiMzTdPRddUUmVjbev7BcydwArdcWpS2GgqccVhcmCufyS-2BJyg5JX8gbCyJlRTuWHrsMFnvrwqi5xZrb96vsSaMSsPINWXHS07DgfLVi8EneaBQZrEMjYngy2PoHBbWXJcueK-2BESvU9usAdSg1-2B95pwepCkuzwrL4tfSQSF0py98pDpUZs8s8w-3D-3D" target="_blank" rel="noopener">T-Shirts →</a><a class="take-there" href="https://url3653.tryplayground.com/ls/click?upn=u001.Gt0-2BDVEWwfh-2F8kMysrpQqI-2Bn9-2BMr7c62tRB-2BDqw4MtVJmUiiSdEemUscfkzJzA-2Ft4gHK0GDGhwSfEwmR7ou9Kyj2J55S7q5-2FXa8qOwfYL7tUx9SH1VdrohupOpvXHuDqwiGw3-2BlmLVMg0ge7jLTaT2wqFkuQjx2uzMNKRcEz7fm9PqEU-2F6ljFXlwN-2F5zkwm6-2F2RI3ZcB-2FFlK50FW1VwhIMF8Xac8abcoSbBB3jTXMGy2wBz-2FQ8-2BQGTMvvoviFdLWZM63OxuhtHrbUzYP2LRJ-2BJNDRm9Dl1Iw2RvaXM3ykaNEJoQ0fkj3vdOeb-2FEDJyxaGESbLrP-2FufxGADoDJ1pgwQ-3D-3Dmk6V_fPgfYNyUpLXV4hNmsEZ1icmdkSyyu4HhbZX-2FM0HEMyHSx15JHegZelrUkzmM84nC2lwpl-2BIy0uS5IMRA4kFXVdABEUfLTQCS8va2CJAbXuUc-2BbfJQM7YrUq8JH-2Ft5xkSnejvDmqq3kxdTfEALPZLFV0vAjGg-2Ff6VjAG7dfogJs4tg5anGqQN8eDYm-2F9fvouc-2B5Em0Qi-2FR39ZrmNfWiYLZVRZ3JT9d-2B-2B3c-2F4ZFAn4P2TTypIVI9nknAa1-2Bx9X5bMayeRkQYkH4XmdUf6PPNlw3jQoSPzFB81-2FJiCRiBs-2ByAmQcayFZdbA5IAqwbGuoY-2BW2qKsFlE8GFuVVSsARyFVuekcx6teQwKUryF5BgPOPpYHoRe4KFTrfJekgMrg6BsOmIyMbh96v4WDeiEXi-2FL6Q03czlNWCPCZbh7ILXxjMBz8iRViNTWXu-2F03etyswTNJvDs9R8OiKeH-2FAbd9og-2B3lD2EcK7UPjYM-2FtXe8VlWk73VJn-2FYqDJir6m2i8NamDvy" target="_blank" rel="noopener">Safe Sleep →</a></label></li>
-      <li class="urgent"><input type="checkbox" id="c2"><label for="c2" class="item-text"><div class="item-title">Verify Step Up "Q1 public school attestation" in EMA</div><div class="item-meta">May still be outstanding despite earlier "completed" note</div><a class="take-there" href="https://apply.stepupforstudents.org/" target="_blank" rel="noopener">Take me there (EMA login) →</a></label></li>
-      <li class="urgent"><input type="checkbox" id="c3"><label for="c3" class="item-text"><div class="item-title">Confirm Abigail's Landow transportation registration</div><div class="item-meta">No confirmation receipt found — school year already started</div><a class="take-there" href="https://lja.parentlocker.com/Transportation-form/" target="_blank" rel="noopener">Registration form →</a><a class="take-there" href="http://landowtransportation.netlify.app" target="_blank" rel="noopener">Bus lookup →</a></label></li>
-      <li><input type="checkbox" id="c4"><label for="c4" class="item-text"><div class="item-title">AFS account ...7280 — payment due</div><div class="item-meta">Aug 20 · account is in Esther's name (Esther Kariyev)</div><a class="take-there" href="https://acura.americanhondafinance.com" target="_blank" rel="noopener">Take me there (login) →</a></label></li>
-      <li><input type="checkbox" id="c5"><label for="c5" class="item-text"><div class="item-title">Cherry — $440.00 payment due</div><div class="item-meta">Aug 24</div><a class="take-there" href="https://url4223.withcherry.com/ls/click?upn=u001.lI2ymL47-2FJ9CPPNBuE3wAGE76fdkJizHi4-2FJwLmbNNt1nCIrCDHx9sPJIFjvTZatoC4K_fPgfYNyUpLXV4hNmsEZ1icmdkSyyu4HhbZX-2FM0HEMyFCOjBkcnF-2FiC4jIeFN0PSw2fCbuUdG-2Bx4u5okddCWKt6ilfgAb0Iy-2B6w8gmpj-2BZ5aeKzDcZJLf7ap0ydZAxnjFJLfEPWJ-2FervOWJA463o7RBtXV-2BpAQ3-2Fa0WEMlW6P8rXjPdhrr3Fjt9wnB9Y6QFJZ749a6yyORuSIKgtCCOXD-2BFES2ZNcPmXSapfdorPcY6ojQ2E9-2BzV3eUcAS2lhzlN9kDXz0oJFiBxTsXOeLS4CgydTeANFbrlPQ09b-2BDqv0v3y-2BxkqZwUam64rNT4Q91fvZPrrdIjtTku0-2FJNC4Tdllux1Ip1EJvFRdZk2smJcLI4j9QtVViRigyao0c2f9T7q" target="_blank" rel="noopener">Take me there →</a></label></li>
-      <li><input type="checkbox" id="c6"><label for="c6" class="item-text"><div class="item-title">High Holiday (Yamim Noraim) seating registration</div><div class="item-meta">Due Aug 25</div><a class="take-there" href="https://brsonline.org/yn" target="_blank" rel="noopener">Take me there →</a></label></li>
-      <li><input type="checkbox" id="c7"><label for="c7" class="item-text"><div class="item-title">Decide & sign up Raphael for Chai Center enrichments/lunch</div><div class="item-meta">Program starts Sept 1 — decide by Aug 27</div><a class="take-there" href="https://app.tryplayground.com/listings/NzUSYIhVgpvlG3XtAYu1" target="_blank" rel="noopener">Enrichments →</a><a class="take-there" href="https://app.tryplayground.com/listings/w6Y0LEgM8HlweeJQvQZP" target="_blank" rel="noopener">Lunches →</a></label></li>
-      <li><input type="checkbox" id="c8"><label for="c8" class="item-text"><div class="item-title">First TABR Hot Lunch order for Aiden</div><div class="item-meta">Due Thu Aug 27, 11 AM</div><a class="take-there" href="https://torahacademy.schoolbitez.com/#/login" target="_blank" rel="noopener">Take me there →</a></label></li>
-      <li><input type="checkbox" id="c9"><label for="c9" class="item-text"><div class="item-title">Reconnect PayPal</div><div class="item-meta">Per your note — planned for tomorrow</div></label></li>
-    </ul>
-  </section>
+  <!-- Add / edit modal -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="modal-title">Add item</h2>
+      <label>Section</label>
+      <input list="section-list" id="field-section" placeholder="e.g. NEEDS ACTION TODAY / THIS WEEK" />
+      <datalist id="section-list"></datalist>
 
-  <section>
-    <div class="section-title">Legal / case follow-ups <span class="count">4</span></div>
-    <ul>
-      <li><input type="checkbox" id="l1"><label for="l1" class="item-text"><div class="item-title">Contact Barry Snyder</div><div class="item-meta">Check whether the Federovsky/Bukhover case has settled · direct contact for Snyder himself not found — his paralegal Destiny Dixon handles correspondence</div><a class="take-there" href="mailto:admin@snyderlegalfirm.com?subject=Federovsky%2FBukhover%20Case%20Status" target="_blank" rel="noopener">Email Destiny Dixon →</a></label></li>
-      <li><input type="checkbox" id="l2"><label for="l2" class="item-text"><div class="item-title">Contact Cindy Sojka</div><div class="item-meta">Pinder settlement status — send her the updated ledger with new payments. Her office's Aug 11 email already states the case settled — confirm this matches what you expected</div><a class="take-there" href="mailto:sojkalawgroup@gmail.com?subject=Pinder%20Settlement%20-%20Updated%20Ledger" target="_blank" rel="noopener">Email Cindy Sojka →</a></label></li>
-      <li><input type="checkbox" id="l3"><label for="l3" class="item-text"><div class="item-title">Send case notes to Workman Injury</div><div class="item-meta">Also get case status updates back from them · 954-361-3997</div><a class="take-there" href="mailto:medicalrecords@workmaninjurylaw.com?subject=Case%20Notes%20and%20Status%20Update" target="_blank" rel="noopener">Email Workman Injury →</a></label></li>
-      <li><input type="checkbox" id="l4"><label for="l4" class="item-text"><div class="item-title">Contact Lurie's attorney/paralegal</div><div class="item-meta">Request a case status update · no attorney/paralegal contact found in any mailbox for this case — only an insurance adjuster shows up. If Lurie has a specific attorney, send me the name/firm and I'll find contact info</div></label></li>
-    </ul>
-  </section>
+      <label>Title</label>
+      <textarea id="field-text" rows="2" placeholder="What needs to happen?"></textarea>
 
-  <section>
-    <div class="section-title">EOB / billing docs — needs follow-up <span class="count">7</span></div>
-    <ul>
-      <li class="urgent"><input type="checkbox" id="e1"><label for="e1" class="item-text"><div class="item-title">Jonathan Lurie — EOBs explicitly flagged missing by Sam Billing (Aug 17)</div><div class="item-meta">CK 6028572761 $174.48 · CK 6028575760 $26.14 · CK 6028612528 $26.14 · CK 6028646728 (amount cut off) — confirm receipt/status of each; ties into the "Contact Lurie's attorney/paralegal" item above</div></label></li>
-      <li><input type="checkbox" id="e2"><label for="e2" class="item-text"><div class="item-title">Jeffrey Pinder — only 1 of his EOBs scanned in (Jun 25 note)</div><div class="item-meta">Sam Billing's note implies more may be missing — confirm with Cindy Sojka/Sam Billing; ties into the "Contact Cindy Sojka re: Pinder settlement" item above</div></label></li>
-      <li><input type="checkbox" id="e3"><label for="e3" class="item-text"><div class="item-title">5 documents couldn't be matched to a patient from the subject line</div><div class="item-meta">Nerve Conduction/EMG (May 18) · Demands Sent (Jun 16) · "wife of previous PT" (Apr 24) · CPT 99456 (Apr 7) · medical necessity (Jan 7) — open each to identify the patient and file correctly</div></label></li>
-      <li><input type="checkbox" id="e4"><label for="e4" class="item-text"><div class="item-title">Boris Fedorovsky intake doc (Apr 24) — cross-ref</div><div class="item-meta">Likely the same case as the Federovsky/Bukhover legal follow-up above</div></label></li>
-      <li><input type="checkbox" id="e5"><label for="e5" class="item-text"><div class="item-title">"Siegal and Buckhover" EOBs/checks doc (May 4) — cross-ref</div><div class="item-meta">Spelling suggests the same Bukhover legal case above</div></label></li>
-      <li><input type="checkbox" id="e6"><label for="e6" class="item-text"><div class="item-title">Full ledger: 26 EOB/billing documents from Sam Billing (Feb 2025–Aug 2026)</div><div class="item-meta">See "Patient EOB / Billing Documents Ledger (from Sam Billing - Albert)" in Drive for the complete list with dates, details, and status</div></label></li>
-      <li><input type="checkbox" id="e7"><label for="e7" class="item-text"><div class="item-title">Note: no ChiroTouch connector exists</div><div class="item-meta">I can't write directly into ChiroTouch's actual patient ledgers — the Drive Sheet above is the tracking system until/unless that integration exists</div></label></li>
-    </ul>
-  </section>
+      <label>Details (optional)</label>
+      <textarea id="field-meta" rows="2" placeholder="Extra context, amounts, dates..."></textarea>
 
-  <section>
-    <div class="section-title">Subscriptions & memberships — review <span class="count">5</span></div>
-    <ul>
-      <li><input type="checkbox" id="s1"><label for="s1" class="item-text"><div class="item-title">Facebook/Meta Ads — ~$497/mo</div><div class="item-meta">39 charges in 90 days — worth confirming it's driving new patients before keeping it as-is</div><a class="take-there" href="https://business.facebook.com/adsmanager" target="_blank" rel="noopener">Manage →</a></label></li>
-      <li><input type="checkbox" id="s2"><label for="s2" class="item-text"><div class="item-title">Review Wave (patient review/reputation software) — ~$499/mo</div><div class="item-meta">Review ROI</div><a class="take-there" href="https://www.reviewwave.com" target="_blank" rel="noopener">Manage →</a></label></li>
-      <li><input type="checkbox" id="s3"><label for="s3" class="item-text"><div class="item-title">Google Measurz — $219.99, billed yearly</div><div class="item-meta">Confirmed via BlueVine Checking: one charge on Jul 9, 2026, memo "GOOGLE *Measurz, Mountain View, CA" — no other hits in the last year, consistent with your note that this is an annual (not monthly) charge. Next one expected ~Jul 2027.</div><a class="take-there" href="https://myaccount.google.com/subscriptions" target="_blank" rel="noopener">Check Google subscriptions →</a></label></li>
-      <li><input type="checkbox" id="s4"><label for="s4" class="item-text"><div class="item-title">"Slack Rebate Easy" — +$2.19, roughly monthly (this is a credit, not a charge)</div><div class="item-meta">BlueVine Checking, memo "Slack Rebate EasySavings NY" — money coming IN on May 19, Jun 20, and Jul 18, 2026, not a quarterly charge as I'd first listed it. Your actual Slack subscription is a separate ~$8.75/mo charge (memo "SLACK T0AA3HAT7NC"). This looks like a bank cashback/rebate rather than anything to cancel — flagging so you can confirm it's expected.</div></label></li>
-      <li><input type="checkbox" id="s5"><label for="s5" class="item-text"><div class="item-title">Amazon Prime Membership — ~$7.07/mo (recurring, not irregular)</div><div class="item-meta">Charged on the CHASE COLLEGE card around the 17th of every month going back to at least Jun 2025 (e.g. Jul 17: $7.07, Jun 17: $7.07) — this is the standard Prime membership fee, not an irregular one-off. Worth confirming whose Prime membership this card is paying for.</div><a class="take-there" href="https://www.amazon.com/manageyourprime" target="_blank" rel="noopener">Manage Prime membership →</a></label></li>
-    </ul>
-    <div class="note" style="margin-top:8px;">Full categorized breakdown (practice software, insurance, marketing, personal) with manage/cancel links for each is in the Financial Summary artifact. Tell me which ones to cancel and I'll either walk you to the right page or handle it directly — I'll always confirm the specific one with you first before changing or cancelling anything.</div>
-  </section>
+      <label>Link (optional)</label>
+      <input type="url" id="field-link" placeholder="https://..." />
 
-  <section>
-    <div class="section-title">Recurring weekly <span class="count">2</span></div>
-    <ul>
-      <li><input type="checkbox" id="r1"><label for="r1" class="item-text"><div class="item-title">Order Lion Cafe lunch for Abigail (Landow)</div><div class="item-meta">Every Sunday</div><a class="take-there" href="https://landowlunch.netlify.app" target="_blank" rel="noopener">Take me there →</a></label></li>
-      <li><input type="checkbox" id="r2"><label for="r2" class="item-text"><div class="item-title">Order TABR Hot Lunch for Aiden</div><div class="item-meta">Every Sunday — cutoff following Thursday 11 AM</div><a class="take-there" href="https://torahacademy.schoolbitez.com/#/login" target="_blank" rel="noopener">Take me there →</a></label></li>
-    </ul>
-  </section>
+      <label class="checkbox-row">
+        <input type="checkbox" id="field-urgent" />
+        Urgent
+      </label>
 
-  <section>
-    <div class="section-title">Open questions / FYI <span class="count">7</span></div>
-    <ul>
-      <li><input type="checkbox" id="f1"><label for="f1" class="item-text"><div class="item-title">ChiroTouch $314 charge — confirm it posted correctly</div><a class="take-there" href="https://chirotouchcommunity.force.com/cloud" target="_blank" rel="noopener">Customer Portal login →</a></label></li>
-      <li><input type="checkbox" id="f2"><label for="f2" class="item-text"><div class="item-title">Boca Raton Synagogue balance — check statement directly</div></label></li>
-      <li><input type="checkbox" id="f3"><label for="f3" class="item-text"><div class="item-title">Parker & Stone lost order — likely resolved</div><div class="item-meta">Aug 17 email says order #PS5370 was lost in transit and already fully refunded — flagging as probably done, let me know if the refund didn't land</div></label></li>
-      <li><input type="checkbox" id="f4"><label for="f4" class="item-text"><div class="item-title">2 stale patient leads + 2 unread messages at frontdesk@</div></label></li>
-      <li><input type="checkbox" id="f5"><label for="f5" class="item-text"><div class="item-title">Owen Christy/ImPACT — confirm Aug 17 meeting status</div></label></li>
-      <li><input type="checkbox" id="f6"><label for="f6" class="item-text"><div class="item-title">Dr. Benjamin Glass — unclear payment status</div></label></li>
-      <li><input type="checkbox" id="f7"><label for="f7" class="item-text"><div class="item-title">William Bodden (NP) — staffing question outstanding</div></label></li>
-    </ul>
-  </section>
+      <div class="modal-actions">
+        <button id="modal-delete" class="danger-btn hidden">Delete</button>
+        <div class="modal-actions-right">
+          <button id="modal-cancel" class="ghost-btn">Cancel</button>
+          <button id="modal-save" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <section>
-    <div class="section-title">Upcoming deadlines <span class="count">2</span></div>
-    <ul>
-      <li><input type="checkbox" id="d0"><label for="d0" class="item-text"><div class="item-title">Chase Credit Card ••0176 (Esther's) — min payment due</div><div class="item-meta">$533.00 due Sep 14 (auto-pay on) · statement balance $15,169.45 · tracked separately, not in financial totals</div></label></li>
-      <li><input type="checkbox" id="d1"><label for="d1" class="item-text"><div class="item-title">EAS Health PLLC lapses/dissolves</div><div class="item-meta">~Sept 18, 2026 — intentional, no action needed</div></label></li>
-      <li><input type="checkbox" id="d2"><label for="d2" class="item-text"><div class="item-title">Esther's NY nursing license CEU renewal</div><div class="item-meta">Due Sep 30</div></label></li>
-    </ul>
-  </section>
-
-  <section>
-    <div class="section-title">Financial snapshot <span class="count">Aug 1–18</span></div>
-    <ul>
-      <li><input type="checkbox" id="fin1"><label for="fin1" class="item-text"><div class="item-title">Net cash flow running −$4,210 this month</div><div class="item-meta">3-month average: −$9,287/month — see full Financial Summary artifact for detail</div></label></li>
-      <li><input type="checkbox" id="fin2"><label for="fin2" class="item-text"><div class="item-title">Merrick Mastercard nearly maxed</div><div class="item-meta">Only $120 available credit</div></label></li>
-    </ul>
-  </section>
-
-  <section>
-    <div class="section-title">Notes <span class="count">free text</span></div>
-    <textarea id="notes-textarea" placeholder="Type anything here — quick thoughts, reminders, context for yourself. Saves automatically a couple seconds after you stop typing."></textarea>
-    <div class="notes-status" id="notes-status"></div>
-  </section>
-
-  <footer>Generated by your Cowork assistant · Full detail in the "Email Backlog Sweep" Drive doc</footer>
-</div>
-
-<script>
-  // ---- CONFIG: filled in once the Apps Script Web App is deployed ----
-  var CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbxED8_RNQ7E_6wVwG9nZ15lVTE1RZbw1J7AGv2VpKrg-ID4G2PwWMNikOOYBHM2fmmr6A/exec', // live sync is ON
-    TOKEN: 'Ya6qR9AWxf-ew8UhU38uwrsmEX006mjD'
-  };
-
-  var banner = document.getElementById('sync-banner');
-  var bannerText = document.getElementById('sync-banner-text');
-  var snapshotSub = document.getElementById('snapshot-sub');
-  var notesEl = document.getElementById('notes-textarea');
-  var notesStatus = document.getElementById('notes-status');
-  var notesSaveTimer = null;
-  var notesLoadedFromServer = false;
-
-  function setBanner(on, text) {
-    banner.className = 'sync-banner ' + (on ? 'on' : 'off');
-    bannerText.textContent = text;
-  }
-
-  function markSynced() {
-    if (!snapshotSub) return;
-    var now = new Date();
-    snapshotSub.textContent = 'Live checklist — last refreshed ' +
-      now.toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
-  }
-
-  function apiGet() {
-    return fetch(CONFIG.API_URL + '?token=' + encodeURIComponent(CONFIG.TOKEN))
-      .then(function(r){ return r.json(); });
-  }
-
-  function apiPost(body) {
-    return fetch(CONFIG.API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight against Apps Script
-      body: JSON.stringify(Object.assign({ token: CONFIG.TOKEN }, body))
-    }).then(function(r){ return r.json(); });
-  }
-
-  function setCheckPill(elId, label, updatedAtIso) {
-    var el = document.getElementById(elId);
-    if (!el || !updatedAtIso) return; // leave as "—" / unknown if never checked yet
-    var when = new Date(updatedAtIso);
-    if (isNaN(when.getTime())) return;
-    var hoursAgo = (Date.now() - when.getTime()) / 3600000;
-    var timeStr = when.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    // A separate hourly heartbeat stamps this — anything older than ~1.5 hours means a
-    // cycle was missed (desktop app / Chrome wasn't open+connected, or not logged in).
-    if (hoursAgo <= 1.5) {
-      el.className = 'check-pill ok';
-      el.textContent = label + ' check: ' + timeStr;
-    } else {
-      el.className = 'check-pill stale';
-      var hoursRounded = Math.round(hoursAgo);
-      el.textContent = label + ' check: ' + timeStr + ' (' + hoursRounded + 'h ago — may be disconnected)';
-    }
-  }
-
-  function applyServerState(items) {
-    items.forEach(function(item) {
-      if (item.Type === 'notes') {
-        if (item.ID === 'notes1') {
-          // Skip overwriting while you're actively typing in it — otherwise a
-          // background refresh mid-edit would clobber what you're writing.
-          if (document.activeElement !== notesEl) {
-            notesEl.value = item.Text || '';
-          }
-          notesLoadedFromServer = true;
-        } else if (item.ID === 'status_whatsapp_check') {
-          setCheckPill('status-whatsapp', 'WhatsApp', item.UpdatedAt);
-        } else if (item.ID === 'status_messages_check') {
-          setCheckPill('status-messages', 'Messages', item.UpdatedAt);
-        } else if (item.ID && item.ID.indexOf('note_') === 0 && item.Text) {
-          var targetId = item.ID.slice(5);
-          var ta = document.querySelector('.item-note[data-id="' + targetId + '"]');
-          var toggle = document.querySelector('.note-toggle[data-id="' + targetId + '"]');
-          if (ta && document.activeElement !== ta) {
-            ta.value = item.Text;
-            ta.style.display = 'block';
-            if (toggle) toggle.textContent = 'Note ✎ (click to hide)';
-          }
-        }
-        return;
-      }
-      var cb = document.getElementById(item.ID);
-      if (!cb) return;
-      cb.checked = !!item.Checked;
-      var label = cb.nextElementSibling;
-      if (label) {
-        var titleEl = label.querySelector('.item-title');
-        if (titleEl) titleEl.classList.toggle('done', !!item.Checked);
-      }
-    });
-    markSynced();
-  }
-
-  function toggleItem(id, checked) {
-    if (!CONFIG.API_URL) return; // live sync not connected — nothing to save
-    apiPost({ action: 'toggle', id: id, checked: checked }).then(function(res) {
-      if (!res.ok) console.warn('toggle failed', res);
-    }).catch(function(err) { console.warn('toggle error', err); });
-  }
-
-  function saveNotes() {
-    if (!CONFIG.API_URL) return;
-    notesStatus.textContent = 'Saving…';
-    apiPost({ action: 'setNotes', text: notesEl.value }).then(function(res) {
-      notesStatus.textContent = res.ok ? 'Saved' : 'Save failed — try again';
-      if (res.ok) setTimeout(function(){ notesStatus.textContent = ''; }, 2000);
-    }).catch(function() { notesStatus.textContent = 'Save failed — try again'; });
-  }
-
-  // ---- Per-item "add a note / context" fields ----
-  // Injected next to every checklist item so you can attach your own context
-  // (e.g. "this is billed yearly") without me having to hand-edit every row.
-  // Saved as a row in the same Sheet with ID "note_<itemId>" — requires the
-  // updated Code.gs (setNotes now accepts an optional id) to be redeployed.
-  function ensureItemNoteUI() {
-    document.querySelectorAll('li input[type=checkbox]').forEach(function(cb) {
-      var li = cb.closest('li');
-      if (!li || li.querySelector('.item-note-wrap')) return;
-      var wrap = document.createElement('div');
-      wrap.className = 'item-note-wrap';
-      var toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'note-toggle';
-      toggle.dataset.id = cb.id;
-      toggle.textContent = '+ Add note / context';
-      var ta = document.createElement('textarea');
-      ta.className = 'item-note';
-      ta.dataset.id = cb.id;
-      ta.placeholder = 'Add context for yourself or for your assistant — this carries over on refresh.';
-      ta.style.display = 'none';
-      wrap.appendChild(toggle);
-      wrap.appendChild(ta);
-      li.appendChild(wrap);
-    });
-  }
-  ensureItemNoteUI();
-
-  var itemNoteTimers = {};
-  var itemNoteStatusTimers = {};
-
-  function saveItemNote(id, text) {
-    if (!CONFIG.API_URL) return;
-    apiPost({ action: 'setNotes', id: 'note_' + id, text: text }).then(function(res) {
-      if (!res.ok) console.warn('item note save failed', res);
-    }).catch(function(err) { console.warn('item note save error', err); });
-  }
-
-  document.addEventListener('click', function(e) {
-    if (!e.target.classList.contains('note-toggle')) return;
-    var id = e.target.dataset.id;
-    var ta = document.querySelector('.item-note[data-id="' + id + '"]');
-    if (!ta) return;
-    var showing = ta.style.display !== 'none';
-    ta.style.display = showing ? 'none' : 'block';
-    if (!showing) ta.focus();
-  });
-
-  document.addEventListener('input', function(e) {
-    if (!e.target.classList.contains('item-note')) return;
-    var id = e.target.dataset.id;
-    var val = e.target.value;
-    clearTimeout(itemNoteTimers[id]);
-    itemNoteTimers[id] = setTimeout(function() { saveItemNote(id, val); }, 1200);
-  });
-
-  document.querySelectorAll('li input[type=checkbox]').forEach(function(cb) {
-    cb.addEventListener('change', function() {
-      var label = cb.nextElementSibling;
-      if (label) {
-        var titleEl = label.querySelector('.item-title');
-        if (titleEl) titleEl.classList.toggle('done', cb.checked);
-      }
-      toggleItem(cb.id, cb.checked);
-    });
-  });
-
-  notesEl.addEventListener('input', function() {
-    notesStatus.textContent = '';
-    clearTimeout(notesSaveTimer);
-    notesSaveTimer = setTimeout(saveNotes, 1500);
-  });
-
-  function syncNow(isBackground) {
-    if (!CONFIG.API_URL) return;
-    if (!isBackground) setBanner(true, 'Connecting…');
-    apiGet().then(function(res) {
-      if (res.ok) {
-        applyServerState(res.items);
-        setBanner(true, 'Live sync connected — changes save instantly');
-      } else {
-        setBanner(false, 'Live sync error: ' + (res.error || 'unknown') + ' — changes will not save');
-      }
-    }).catch(function(err) {
-      setBanner(false, 'Live sync unreachable here — if you\'re viewing this inside Claude\'s preview panel, that\'s expected (it blocks outside network calls); open the downloaded HTML file directly in your browser and it will connect. (' + err + ')');
-    });
-  }
-
-  if (CONFIG.API_URL) {
-    syncNow(false);
-    // Auto-refresh while this page is left open, so checked boxes, notes, and
-    // status pills updated elsewhere (or by the background assistant) show up
-    // here without needing a manual page reload. New checklist ITEMS still
-    // need a freshly delivered copy of this file (that's a structural change,
-    // not just data) — but state on existing items stays current.
-    setInterval(function() { syncNow(true); }, 45000);
-  }
-
-  // ---- Passcode gate ----
-  // Lightweight deterrent only, not real security: this page's full source
-  // (including this passcode) is visible to anyone who views-source on this
-  // publicly hosted URL. It just keeps the checklist from being immediately
-  // readable to a casual visitor. Re-entered each visit (no browser storage
-  // used) so the same file works safely inside Claude's artifact preview too.
-  (function() {
-    var GATE_PASSCODE = 'GenChiro123';
-    var overlay = document.getElementById('gate-overlay');
-    var input = document.getElementById('gate-input');
-    var submit = document.getElementById('gate-submit');
-    var error = document.getElementById('gate-error');
-
-    function tryUnlock() {
-      if (input.value === GATE_PASSCODE) {
-        overlay.style.display = 'none';
-      } else {
-        error.textContent = 'Incorrect passcode — try again.';
-        input.value = '';
-        input.focus();
-      }
-    }
-
-    submit.addEventListener('click', tryUnlock);
-    input.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') tryUnlock();
-    });
-    input.focus();
-  })();
-</script>
+  <script src="/app.js"></script>
 </body>
 </html>
