@@ -170,6 +170,7 @@ body {
 }
 .danger-btn:hover { background: var(--urgent-bg); }
 .small-btn { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; box-shadow: none; }
+.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; }
 
 /* Status pills */
 .status-pills { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -304,8 +305,13 @@ body {
   vertical-align: middle;
 }
 
-/* Inline note / context */
-.item-note-wrap { margin-top: 6px; }
+/* Inline note / context — separated from the title with a thin, low-opacity
+   rule so it visually reads as part of the same card, not floating loose. */
+.item-note-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 20, 20, 0.07);
+}
 .item-meta-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .note-edit-btn {
   background: none;
@@ -332,18 +338,53 @@ body {
   padding: 0;
 }
 .add-note-btn:hover { text-decoration: underline; }
-.inline-note-input {
+.inline-note-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* Mention-aware textarea: a plain textarea (invisible text, real caret)
+   stacked over a backdrop div that mirrors the same text with @tags
+   highlighted — keeps native textarea editing/undo/caret behavior while
+   still rendering rich highlights. */
+.mention-field {
+  position: relative;
   width: 100%;
+}
+.mention-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+}
+.mention-field .mention-backdrop, .mention-field .mention-input {
   padding: 9px 11px;
+  border: 1px solid transparent;
   border-radius: 8px;
-  border: 1px solid var(--border);
   font-size: 13.5px;
   font-family: inherit;
+  line-height: 1.45;
+}
+.mention-field .mention-input {
+  position: relative;
+  display: block;
+  width: 100%;
   resize: vertical;
   background: #fbfbfa;
+  color: transparent;
+  caret-color: var(--text);
+  border-color: var(--border);
 }
-.inline-note-input:focus { outline: none; border-color: var(--accent); background: white; }
-.inline-note-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.mention-field .mention-input:focus { outline: none; border-color: var(--accent); background: white; }
+.mention-field .mention-input::placeholder { color: var(--text-faint); }
+mark.mention {
+  background: var(--accent-bg);
+  color: var(--accent-dark);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+.mention-hint { font-size: 11.5px; color: var(--text-faint); margin: 6px 2px 0; line-height: 1.4; }
 
 .empty-state {
   text-align: center;
@@ -436,3 +477,100 @@ body {
   font-weight: 600;
   color: var(--urgent);
 }
+
+/* Calendar */
+.calendar-modal { max-width: 420px; }
+.calendar-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.calendar-modal-header h2 { margin: 0; font-size: 17px; }
+.cal-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 26px 0;
+}
+.cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+}
+.cal-cell-blank { visibility: hidden; }
+.cal-cell-has-data {
+  cursor: pointer;
+  background: #fbfbfa;
+  border-color: var(--border-soft);
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+.cal-cell-has-data:hover { background: white; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.cal-cell-today { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.cal-cell-today .cal-cell-num { color: var(--accent-dark); }
+.cal-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.cal-dot-green { background: var(--accent); }
+.cal-dot-yellow { background: #d6a72c; }
+.cal-dot-red { background: var(--urgent); }
+.cal-legend {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin: 14px 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cal-day-panel h3 { margin: 4px 0 14px; font-size: 16px; font-weight: 800; }
+.cal-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.cal-item-row:last-child { border-bottom: none; }
+.cal-item-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--accent-dark);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.cal-item-row.checked .cal-item-check { background: var(--accent-bg); border-color: var(--accent); }
+.cal-item-body { flex: 1; min-width: 0; }
+.cal-item-text { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.cal-item-row.checked .cal-item-text { text-decoration: line-through; color: var(--text-dim); }
+.cal-item-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }

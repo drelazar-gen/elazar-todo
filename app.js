@@ -181,6 +181,59 @@ function escapeHtml(str) {
   }[c]));
 }
 
+/* ---------------- Mention-aware notes (@context tagging) ---------------- */
+// Wraps @word tokens in a highlighted <mark> — used both for the live-typing
+// overlay field and for the read-only collapsed note display.
+function highlightMentionsHtml(str) {
+  return escapeHtml(str).replace(/@(\w+)/g, '<mark class="mention">@$1</mark>');
+}
+
+// Builds a "mention-aware textarea": a real (invisible-text) <textarea> for
+// native typing/caret/undo behavior, stacked over a backdrop <div> that
+// mirrors the same text with @tags highlighted. Returns a small controller
+// object so callers don't need to know about the DOM internals.
+function createMentionField({ placeholder, rows } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mention-field';
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'mention-backdrop';
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'mention-input';
+  textarea.rows = rows || 2;
+  if (placeholder) textarea.placeholder = placeholder;
+
+  function sync() {
+    const val = textarea.value;
+    // Trailing newline(s) collapse in a plain div — pad so the backdrop's
+    // height/scroll stays matched to the textarea.
+    backdrop.innerHTML = highlightMentionsHtml(val) + (/\n$/.test(val) ? '&nbsp;' : '');
+    backdrop.scrollTop = textarea.scrollTop;
+  }
+
+  textarea.addEventListener('input', sync);
+  textarea.addEventListener('scroll', () => { backdrop.scrollTop = textarea.scrollTop; });
+
+  wrap.appendChild(backdrop);
+  wrap.appendChild(textarea);
+  sync();
+
+  return {
+    el: wrap,
+    getValue: () => textarea.value,
+    setValue: (v) => { textarea.value = v || ''; sync(); },
+    focus: () => textarea.focus(),
+  };
+}
+
+// Single reusable mention field mounted into the add/edit modal.
+const metaField = createMentionField({
+  placeholder: 'Extra context, amounts, dates... Tag @context for something you want handled.',
+  rows: 3,
+});
+$('#field-meta-mount').appendChild(metaField.el);
+
 function renderItem(item) {
   const row = document.createElement('div');
   row.className = 'item-row' + (item.checked ? ' checked' : '') + (item.urgent && !item.checked ? ' urgent' : '');
@@ -241,7 +294,7 @@ function renderNoteWrap(item, container) {
 
     const meta = document.createElement('div');
     meta.className = 'item-meta';
-    meta.textContent = item.meta;
+    meta.innerHTML = highlightMentionsHtml(item.meta);
     metaRow.appendChild(meta);
 
     const editBtn = document.createElement('button');
@@ -272,11 +325,8 @@ function openInlineNoteEditor(item, container) {
   container.innerHTML = '';
   container.addEventListener('click', (e) => e.stopPropagation());
 
-  const textarea = document.createElement('textarea');
-  textarea.className = 'inline-note-input';
-  textarea.rows = 2;
-  textarea.placeholder = 'Extra context, amounts, dates...';
-  textarea.value = item.meta || '';
+  const field = createMentionField({ placeholder: 'Extra context, amounts, dates... Tag @context for something you want handled.', rows: 2 });
+  field.setValue(item.meta || '');
 
   const actions = document.createElement('div');
   actions.className = 'inline-note-actions';
@@ -292,7 +342,7 @@ function openInlineNoteEditor(item, container) {
   saveBtn.className = 'primary-btn small-btn';
   saveBtn.textContent = 'Save';
   saveBtn.addEventListener('click', async () => {
-    const val = textarea.value.trim();
+    const val = field.getValue().trim();
     saveBtn.disabled = true;
     cancelBtn.disabled = true;
     try {
@@ -314,9 +364,9 @@ function openInlineNoteEditor(item, container) {
 
   actions.appendChild(cancelBtn);
   actions.appendChild(saveBtn);
-  container.appendChild(textarea);
+  container.appendChild(field.el);
   container.appendChild(actions);
-  textarea.focus();
+  field.focus();
 }
 
 async function toggleItem(item, checked) {
@@ -344,7 +394,7 @@ function openModal(item) {
   $('#modal-title').textContent = item ? 'Edit item' : 'Add item';
   $('#field-section').value = item ? item.section : '';
   $('#field-text').value = item ? item.text : '';
-  $('#field-meta').value = item ? item.meta : '';
+  metaField.setValue(item ? item.meta : '');
   $('#field-link').value = item ? item.link : '';
   $('#field-urgent').checked = item ? item.urgent : false;
   $('#modal-delete').classList.toggle('hidden', !item);
@@ -368,7 +418,7 @@ async function saveModal() {
   const payload = {
     section: $('#field-section').value.trim() || 'ADDED BY YOU',
     text,
-    meta: $('#field-meta').value.trim(),
+    meta: metaField.getValue().trim(),
     link: $('#field-link').value.trim(),
     urgent: $('#field-urgent').checked,
   };
@@ -433,6 +483,172 @@ async function backgroundRefresh() {
         : 'Sync issue — could not connect'
     );
   }
+}
+
+/* ---------------- Calendar (completion heatmap) ---------------- */
+
+let calYear = null;
+let calMonth = null; // 1-12
+let calMonthData = {};
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function formatDateISO(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function showCalGridView() {
+  $('#cal-day-panel').classList.add('hidden');
+  $('#cal-grid').classList.remove('hidden');
+  document.querySelector('.cal-weekday-row').classList.remove('hidden');
+  document.querySelector('.cal-legend').classList.remove('hidden');
+}
+
+function showCalDayView() {
+  $('#cal-grid').classList.add('hidden');
+  document.querySelector('.cal-weekday-row').classList.add('hidden');
+  document.querySelector('.cal-legend').classList.add('hidden');
+  $('#cal-day-panel').classList.remove('hidden');
+}
+
+function openCalendar() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth() + 1;
+  $('#calendar-overlay').classList.remove('hidden');
+  showCalGridView();
+  loadCalMonth();
+}
+
+function closeCalendar() {
+  $('#calendar-overlay').classList.add('hidden');
+}
+
+async function loadCalMonth() {
+  const ym = `${calYear}-${pad2(calMonth)}`;
+  $('#cal-month-label').textContent = new Date(calYear, calMonth - 1, 1)
+    .toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  $('#cal-grid').innerHTML = '<div class="cal-loading">Loading…</div>';
+  try {
+    const data = await api(`/api/calendar?month=${ym}`);
+    calMonthData = {};
+    (data.days || []).forEach((d) => { calMonthData[d.date] = d; });
+    renderCalGrid();
+  } catch (err) {
+    $('#cal-grid').innerHTML = `<div class="cal-loading">Could not load calendar: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderCalGrid() {
+  const grid = $('#cal-grid');
+  grid.innerHTML = '';
+  const firstDow = new Date(calYear, calMonth - 1, 1).getDay(); // 0 = Sun
+  const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+  const todayStr = formatDateISO(new Date());
+
+  for (let i = 0; i < firstDow; i++) {
+    const blank = document.createElement('div');
+    blank.className = 'cal-cell cal-cell-blank';
+    grid.appendChild(blank);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${calYear}-${pad2(calMonth)}-${pad2(d)}`;
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell';
+    if (dateStr === todayStr) cell.classList.add('cal-cell-today');
+
+    const num = document.createElement('div');
+    num.className = 'cal-cell-num';
+    num.textContent = String(d);
+    cell.appendChild(num);
+
+    const info = calMonthData[dateStr];
+    if (info) {
+      const dot = document.createElement('span');
+      dot.className = 'cal-dot ' + (info.pct >= 75 ? 'cal-dot-green' : info.pct >= 50 ? 'cal-dot-yellow' : 'cal-dot-red');
+      cell.appendChild(dot);
+      cell.classList.add('cal-cell-has-data');
+      cell.addEventListener('click', () => openCalDay(dateStr));
+    } else {
+      cell.classList.add('cal-cell-empty');
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+async function openCalDay(dateStr) {
+  $('#cal-day-title').textContent = new Date(dateStr + 'T00:00:00')
+    .toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  $('#cal-day-items').innerHTML = '<div class="cal-loading">Loading…</div>';
+  showCalDayView();
+
+  try {
+    const data = await api(`/api/calendar?date=${dateStr}`);
+    renderCalDayItems(dateStr, data.items || []);
+  } catch (err) {
+    $('#cal-day-items').innerHTML = `<div class="cal-loading">Could not load: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderCalDayItems(dateStr, items) {
+  const container = $('#cal-day-items');
+  container.innerHTML = '';
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state">No items recorded for this day.</div>';
+    return;
+  }
+
+  items.forEach((it) => {
+    const row = document.createElement('div');
+    row.className = 'cal-item-row' + (it.checked ? ' checked' : '');
+
+    const check = document.createElement('span');
+    check.className = 'cal-item-check';
+    check.textContent = it.checked ? '✓' : '';
+    row.appendChild(check);
+
+    const body = document.createElement('div');
+    body.className = 'cal-item-body';
+    const text = document.createElement('div');
+    text.className = 'cal-item-text';
+    text.textContent = it.text;
+    body.appendChild(text);
+    if (it.meta) {
+      const meta = document.createElement('div');
+      meta.className = 'cal-item-meta';
+      meta.innerHTML = highlightMentionsHtml(it.meta);
+      body.appendChild(meta);
+    }
+    row.appendChild(body);
+
+    // Uncheck / move back onto the current working list — for anything
+    // that wasn't actually completed or needs another look.
+    const reopenBtn = document.createElement('button');
+    reopenBtn.type = 'button';
+    reopenBtn.className = 'ghost-btn small-btn';
+    reopenBtn.textContent = 'Move to current list';
+    reopenBtn.addEventListener('click', async () => {
+      reopenBtn.disabled = true;
+      reopenBtn.textContent = 'Moving…';
+      try {
+        await api('/api/calendar', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'reopen', date: dateStr, itemId: it.itemId }),
+        });
+        await loadItems();
+        reopenBtn.textContent = 'Done ✓';
+      } catch (err) {
+        alert('Could not move item: ' + err.message);
+        reopenBtn.disabled = false;
+        reopenBtn.textContent = 'Move to current list';
+      }
+    });
+    row.appendChild(reopenBtn);
+
+    container.appendChild(row);
+  });
 }
 
 async function init() {
@@ -507,6 +723,23 @@ $('#modal-delete-yes').addEventListener('click', deleteModal);
 
 $('#modal-overlay').addEventListener('click', (e) => {
   if (e.target === $('#modal-overlay')) closeModal();
+});
+
+$('#calendar-btn').addEventListener('click', openCalendar);
+$('#cal-close').addEventListener('click', closeCalendar);
+$('#cal-back').addEventListener('click', showCalGridView);
+$('#cal-prev').addEventListener('click', () => {
+  calMonth -= 1;
+  if (calMonth < 1) { calMonth = 12; calYear -= 1; }
+  loadCalMonth();
+});
+$('#cal-next').addEventListener('click', () => {
+  calMonth += 1;
+  if (calMonth > 12) { calMonth = 1; calYear += 1; }
+  loadCalMonth();
+});
+$('#calendar-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#calendar-overlay')) closeCalendar();
 });
 
 init();

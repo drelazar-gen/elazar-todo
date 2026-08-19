@@ -34,6 +34,7 @@
           <div id="updated-label" class="updated-label"></div>
         </div>
         <div class="header-actions">
+          <button id="calendar-btn" class="ghost-btn icon-btn" title="Calendar">📅</button>
           <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
           <button id="logout-btn" class="ghost-btn">Log out</button>
         </div>
@@ -73,7 +74,8 @@
       <textarea id="field-text" rows="2" placeholder="What needs to happen?"></textarea>
 
       <label>Note / context (optional)</label>
-      <textarea id="field-meta" rows="2" placeholder="Extra context, amounts, dates..."></textarea>
+      <div id="field-meta-mount"></div>
+      <p class="mention-hint">Tag <strong>@word</strong> (e.g. "@context") to flag a note as something for the assistant to act on, not just a note to yourself.</p>
 
       <label>Link (optional)</label>
       <input type="url" id="field-link" placeholder="https://..." />
@@ -95,6 +97,35 @@
         <div class="modal-actions-right">
           <button id="modal-cancel" class="ghost-btn">Cancel</button>
           <button id="modal-save" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar -->
+  <div id="calendar-overlay" class="modal-overlay hidden">
+    <div class="modal calendar-modal">
+      <div class="calendar-modal-header">
+        <button id="cal-prev" class="ghost-btn small-btn" title="Previous month">‹</button>
+        <h2 id="cal-month-label">Calendar</h2>
+        <button id="cal-next" class="ghost-btn small-btn" title="Next month">›</button>
+      </div>
+      <div class="cal-weekday-row">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <p class="cal-legend"><span class="cal-dot cal-dot-green"></span> 75%+ done &nbsp; <span class="cal-dot cal-dot-yellow"></span> 50–75% &nbsp; <span class="cal-dot cal-dot-red"></span> under 50%</p>
+
+      <div id="cal-day-panel" class="cal-day-panel hidden">
+        <button id="cal-back" class="ghost-btn small-btn">← Back to calendar</button>
+        <h3 id="cal-day-title"></h3>
+        <div id="cal-day-items"></div>
+      </div>
+
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button id="cal-close" class="ghost-btn">Close</button>
         </div>
       </div>
     </div>
