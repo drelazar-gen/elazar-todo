@@ -1,5 +1,5 @@
 const { isAuthenticated } = require('../lib/auth');
-const { listItems, createItem, updateItem, deleteItem } = require('../lib/airtable');
+const { listItems, createItem, updateItem, deleteItem, getStatus } = require('../lib/airtable');
 
 module.exports = async (req, res) => {
   if (!isAuthenticated(req)) {
@@ -9,8 +9,8 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'GET') {
-      const items = await listItems();
-      res.status(200).json({ ok: true, items });
+      const [items, status] = await Promise.all([listItems(), getStatus()]);
+      res.status(200).json({ ok: true, items, status });
       return;
     }
 
