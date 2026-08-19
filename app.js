@@ -185,7 +185,10 @@ function escapeHtml(str) {
 // Wraps @word tokens in a highlighted <mark> — used both for the live-typing
 // overlay field and for the read-only collapsed note display.
 function highlightMentionsHtml(str) {
-  return escapeHtml(str).replace(/@(\w+)/g, '<mark class="mention">@$1</mark>');
+  // Negative lookbehind keeps this from matching the "@domain" part of an
+  // email address (e.g. "esteek317@gmail.com") — only a genuine @tag not
+  // glued to a preceding word character counts as a mention.
+  return escapeHtml(str).replace(/(?<!\w)@(\w+)/g, '<mark class="mention">@$1</mark>');
 }
 
 // Builds a "mention-aware textarea": a real (invisible-text) <textarea> for
