@@ -423,5 +423,16 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-top: 24px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .modal-actions-right { display: flex; gap: 10px; }
+.modal-delete-wrap { display: flex; align-items: center; }
+.delete-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--urgent);
+}

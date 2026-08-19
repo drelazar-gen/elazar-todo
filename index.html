@@ -84,7 +84,14 @@
       </label>
 
       <div class="modal-actions">
-        <button id="modal-delete" class="danger-btn hidden">Delete</button>
+        <div class="modal-delete-wrap">
+          <button id="modal-delete" class="danger-btn hidden">Delete</button>
+          <div id="modal-delete-confirm" class="delete-confirm-row hidden">
+            <span>Delete for good?</span>
+            <button id="modal-delete-no" type="button" class="ghost-btn small-btn">No</button>
+            <button id="modal-delete-yes" type="button" class="danger-btn small-btn">Yes, delete</button>
+          </div>
+        </div>
         <div class="modal-actions-right">
           <button id="modal-cancel" class="ghost-btn">Cancel</button>
           <button id="modal-save" class="primary-btn">Save</button>

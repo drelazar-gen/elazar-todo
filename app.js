@@ -334,6 +334,11 @@ async function toggleItem(item, checked) {
   }
 }
 
+function resetDeleteConfirm() {
+  $('#modal-delete-confirm').classList.add('hidden');
+  $('#modal-delete').classList.remove('hidden');
+}
+
 function openModal(item) {
   editingRecordId = item ? item.recordId : null;
   $('#modal-title').textContent = item ? 'Edit item' : 'Add item';
@@ -343,12 +348,15 @@ function openModal(item) {
   $('#field-link').value = item ? item.link : '';
   $('#field-urgent').checked = item ? item.urgent : false;
   $('#modal-delete').classList.toggle('hidden', !item);
+  resetDeleteConfirm();
+  if (!item) $('#modal-delete').classList.add('hidden');
   $('#modal-overlay').classList.remove('hidden');
 }
 
 function closeModal() {
   $('#modal-overlay').classList.add('hidden');
   editingRecordId = null;
+  resetDeleteConfirm();
 }
 
 async function saveModal() {
@@ -386,7 +394,6 @@ async function saveModal() {
 
 async function deleteModal() {
   if (!editingRecordId) return;
-  if (!confirm('Delete this item?')) return;
   try {
     await api('/api/items', {
       method: 'POST',
@@ -489,7 +496,15 @@ $('#quick-add-form').addEventListener('submit', async (e) => {
 $('#add-fab').addEventListener('click', () => openModal(null));
 $('#modal-cancel').addEventListener('click', closeModal);
 $('#modal-save').addEventListener('click', saveModal);
-$('#modal-delete').addEventListener('click', deleteModal);
+
+// Two-step inline delete confirm — no native confirm() popup.
+$('#modal-delete').addEventListener('click', () => {
+  $('#modal-delete').classList.add('hidden');
+  $('#modal-delete-confirm').classList.remove('hidden');
+});
+$('#modal-delete-no').addEventListener('click', resetDeleteConfirm);
+$('#modal-delete-yes').addEventListener('click', deleteModal);
+
 $('#modal-overlay').addEventListener('click', (e) => {
   if (e.target === $('#modal-overlay')) closeModal();
 });
