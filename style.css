@@ -365,17 +365,30 @@ body {
   font-family: inherit;
   line-height: 1.45;
 }
+.mention-field .mention-backdrop {
+  background: #fbfbfa;
+  border-color: var(--border);
+}
 .mention-field .mention-input {
   position: relative;
   display: block;
   width: 100%;
   resize: vertical;
-  background: #fbfbfa;
+  /* Transparent so the highlighted backdrop underneath shows through — a
+     positioned element painted later in the DOM (this textarea) stacks
+     above its absolutely-positioned sibling (the backdrop) regardless of
+     which one is visually "under" conceptually, so an opaque background
+     here would hide the highlights entirely. */
+  background: transparent;
   color: transparent;
   caret-color: var(--text);
-  border-color: var(--border);
+  border-color: transparent;
+  outline: none;
 }
-.mention-field .mention-input:focus { outline: none; border-color: var(--accent); background: white; }
+.mention-field:focus-within .mention-backdrop { background: white; border-color: var(--accent); }
+/* Beats the modal's generic ".modal textarea:focus" background rule, which
+   would otherwise re-opaque this textarea and hide the backdrop again. */
+.mention-field .mention-input:focus { background: transparent; outline: none; }
 .mention-field .mention-input::placeholder { color: var(--text-faint); }
 mark.mention {
   background: var(--accent-bg);
