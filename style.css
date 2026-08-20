@@ -170,7 +170,7 @@ body {
 }
 .danger-btn:hover { background: var(--urgent-bg); }
 .small-btn { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; box-shadow: none; }
-.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; }
+.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; } /* Calendar toggle sized up to read as its own button rather than blending into the row. */ .icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; } /* Calendar toggle sized up to read as its own button rather than blending into the row. */ #calendar-btn { font-size: 22px; padding: 6px 13px; } { font-size: 22px; padding: 6px 13px; }
 
 /* Status pills */
 .status-pills { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -185,9 +185,9 @@ body {
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 .pill-lg {
-  padding: 10px 18px;
+  width: 100%; box-sizing: border-box; padding: 10px 16px;
   font-size: 13px;
-  width: fit-content;
+
   box-shadow: var(--shadow-sm);
 }
 .pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -223,7 +223,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Quick add */
+@media (max-width: 480px) { .app-header { padding: 8px 4px 12px; } .header-top { flex-wrap: wrap; row-gap: 6px; } .header-actions { flex-wrap: wrap; justify-content: flex-end; } .status-pills { margin-top: 10px; gap: 6px; } .pill-lg { font-size: 12px; padding: 8px 14px; } .pill-sm { font-size: 10.5px; padding: 5px 10px; } #calendar-btn { font-size: 20px; padding: 5px 11px; } } /* Quick add */
 .quick-add-card { margin: 18px 4px 22px; }
 .quick-add-row { display: flex; gap: 8px; }
 .quick-add-row input {
