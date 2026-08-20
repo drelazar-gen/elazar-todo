@@ -37,13 +37,17 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
-      const { action, date, itemId } = body;
+      const { action, date, itemId, note } = body;
       if (action === 'reopen') {
         if (!date || !itemId) {
           res.status(400).json({ ok: false, error: 'date and itemId are required' });
           return;
         }
-        const item = await reopenSnapshotItem(date, itemId);
+        if (!note || !String(note).trim()) {
+          res.status(400).json({ ok: false, error: 'A note explaining the reopen is required' });
+          return;
+        }
+        const item = await reopenSnapshotItem(date, itemId, note);
         res.status(200).json({ ok: true, item });
         return;
       }
