@@ -170,7 +170,7 @@ body {
 }
 .danger-btn:hover { background: var(--urgent-bg); }
 .small-btn { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; box-shadow: none; }
-.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; } /* Calendar toggle sized up to read as its own button rather than blending into the row. */ .icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; } /* Calendar toggle sized up to read as its own button rather than blending into the row. */ #calendar-btn { font-size: 22px; padding: 6px 13px; } { font-size: 22px; padding: 6px 13px; }
+.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; } /* Calendar toggle sized up to read as its own button rather than blending into the row. */ #calendar-btn { font-size: 22px; padding: 6px 13px; }
 
 /* Status pills */
 .status-pills { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
