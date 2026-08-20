@@ -344,6 +344,12 @@ function renderItem(item) {
     flag.textContent = 'CARRIED OVER';
     text.appendChild(flag);
   }
+  if (item.reopened && !item.checked) {
+    const flag = document.createElement('span');
+    flag.className = 'reopened-flag';
+    flag.textContent = 'PREVIOUSLY COMPLETED';
+    text.appendChild(flag);
+  }
   text.appendChild(document.createTextNode(item.text));
   body.appendChild(text);
 
@@ -799,28 +805,93 @@ function renderCalDayItems(dateStr, items) {
     row.appendChild(body);
 
     // Uncheck / move back onto the current working list — for anything
-    // that wasn't actually completed or needs another look.
+    // that wasn't actually completed or needs another look. Requires a
+    // short context note first (why it's being reopened) — that note gets
+    // appended to the card's note log and a "PREVIOUSLY COMPLETED" badge
+    // shows on the live card, so re-adding something isn't silent.
+    const reopenWrap = document.createElement('div');
+    reopenWrap.className = 'reopen-wrap';
+
     const reopenBtn = document.createElement('button');
     reopenBtn.type = 'button';
     reopenBtn.className = 'ghost-btn small-btn';
     reopenBtn.textContent = 'Move to current list';
-    reopenBtn.addEventListener('click', async () => {
-      reopenBtn.disabled = true;
-      reopenBtn.textContent = 'Moving…';
+
+    const promptBox = document.createElement('div');
+    promptBox.className = 'reopen-prompt hidden';
+
+    const promptLabel = document.createElement('p');
+    promptLabel.className = 'reopen-prompt-label';
+    promptLabel.textContent = 'Why is this coming back? (required)';
+
+    const promptInput = document.createElement('textarea');
+    promptInput.className = 'reopen-prompt-input';
+    promptInput.rows = 2;
+    promptInput.placeholder = 'e.g. "Turned out the form was never actually submitted"';
+
+    const promptActions = document.createElement('div');
+    promptActions.className = 'reopen-prompt-actions';
+
+    const promptCancel = document.createElement('button');
+    promptCancel.type = 'button';
+    promptCancel.className = 'ghost-btn small-btn';
+    promptCancel.textContent = 'Cancel';
+
+    const promptConfirm = document.createElement('button');
+    promptConfirm.type = 'button';
+    promptConfirm.className = 'primary-btn small-btn';
+    promptConfirm.textContent = 'Move to current list';
+    promptConfirm.disabled = true;
+
+    promptInput.addEventListener('input', () => {
+      promptConfirm.disabled = !promptInput.value.trim();
+    });
+
+    promptCancel.addEventListener('click', () => {
+      promptBox.classList.add('hidden');
+      reopenBtn.classList.remove('hidden');
+      promptInput.value = '';
+      promptConfirm.disabled = true;
+    });
+
+    reopenBtn.addEventListener('click', () => {
+      reopenBtn.classList.add('hidden');
+      promptBox.classList.remove('hidden');
+      promptInput.focus();
+    });
+
+    promptConfirm.addEventListener('click', async () => {
+      const note = promptInput.value.trim();
+      if (!note) return;
+      promptConfirm.disabled = true;
+      promptCancel.disabled = true;
+      promptInput.disabled = true;
+      promptConfirm.textContent = 'Moving…';
       try {
         await api('/api/calendar', {
           method: 'POST',
-          body: JSON.stringify({ action: 'reopen', date: dateStr, itemId: it.itemId }),
+          body: JSON.stringify({ action: 'reopen', date: dateStr, itemId: it.itemId, note }),
         });
         await loadItems();
-        reopenBtn.textContent = 'Done ✓';
+        promptConfirm.textContent = 'Done ✓';
       } catch (err) {
         alert('Could not move item: ' + err.message);
-        reopenBtn.disabled = false;
-        reopenBtn.textContent = 'Move to current list';
+        promptConfirm.disabled = false;
+        promptCancel.disabled = false;
+        promptInput.disabled = false;
+        promptConfirm.textContent = 'Move to current list';
       }
     });
-    row.appendChild(reopenBtn);
+
+    promptActions.appendChild(promptCancel);
+    promptActions.appendChild(promptConfirm);
+    promptBox.appendChild(promptLabel);
+    promptBox.appendChild(promptInput);
+    promptBox.appendChild(promptActions);
+
+    reopenWrap.appendChild(reopenBtn);
+    reopenWrap.appendChild(promptBox);
+    row.appendChild(reopenWrap);
 
     container.appendChild(row);
   });

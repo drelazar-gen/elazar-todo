@@ -170,7 +170,10 @@ body {
 }
 .danger-btn:hover { background: var(--urgent-bg); }
 .small-btn { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; box-shadow: none; }
-.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; } /* Calendar toggle sized up to read as its own button rather than blending into the row. */ #calendar-btn { font-size: 22px; padding: 6px 13px; }
+.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; }
+/* Calendar toggle is the primary secondary-action here — sized up so it
+   reads clearly as its own button rather than blending into the row. */
+#calendar-btn { font-size: 22px; padding: 6px 13px; }
 
 /* Status pills */
 .status-pills { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -185,9 +188,13 @@ body {
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 .pill-lg {
-  width: 100%; box-sizing: border-box; padding: 10px 16px;
+  /* Full width (not fit-content) so the text lays out across the whole
+     available line instead of wrapping inside a narrow pill — that
+     wrapping is what made the sticky header tall on phones. */
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 16px;
   font-size: 13px;
-
   box-shadow: var(--shadow-sm);
 }
 .pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -223,7 +230,23 @@ body {
   flex-shrink: 0;
 }
 
-@media (max-width: 480px) { .app-header { padding: 8px 4px 12px; } .header-top { flex-wrap: wrap; row-gap: 6px; } .header-actions { flex-wrap: wrap; justify-content: flex-end; } .status-pills { margin-top: 10px; gap: 6px; } .pill-lg { font-size: 12px; padding: 8px 14px; } .pill-sm { font-size: 10.5px; padding: 5px 10px; } #calendar-btn { font-size: 20px; padding: 5px 11px; } } /* Quick add */
+/* Compact the sticky header on phones — previously the title row, action
+   buttons, and both status pills could each wrap onto their own extra
+   line on a narrow screen, pushing the sticky header down to ~8 lines
+   tall and eating a big chunk of the viewport before any to-do items
+   were visible. This tightens spacing/sizing and lets rows wrap once
+   cleanly instead of stacking excessively. */
+@media (max-width: 480px) {
+  .app-header { padding: 8px 4px 12px; }
+  .header-top { flex-wrap: wrap; row-gap: 6px; }
+  .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .status-pills { margin-top: 10px; gap: 6px; }
+  .pill-lg { font-size: 12px; padding: 8px 14px; }
+  .pill-sm { font-size: 10.5px; padding: 5px 10px; }
+  #calendar-btn { font-size: 20px; padding: 5px 11px; }
+}
+
+/* Quick add */
 .quick-add-card { margin: 18px 4px 22px; }
 .quick-add-row { display: flex; gap: 8px; }
 .quick-add-row input {
@@ -308,6 +331,15 @@ body {
   font-size: 10.5px;
   font-weight: 800;
   color: #b8791a;
+  margin-right: 7px;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+.reopened-flag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #3b5fd1;
   margin-right: 7px;
   letter-spacing: 0.05em;
   vertical-align: middle;
@@ -649,3 +681,39 @@ mark.mention {
 .cal-item-text { font-size: 14px; font-weight: 600; line-height: 1.4; }
 .cal-item-row.checked .cal-item-text { text-decoration: line-through; color: var(--text-dim); }
 .cal-item-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+
+.cal-item-row { flex-wrap: wrap; }
+.reopen-wrap { flex-basis: 100%; margin-left: 31px; margin-top: 6px; }
+.reopen-prompt {
+  width: 100%;
+  max-width: 280px;
+  box-sizing: border-box;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.reopen-prompt-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+.reopen-prompt-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+  background: var(--card);
+  color: var(--text);
+}
+.reopen-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
