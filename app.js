@@ -15,7 +15,17 @@ const SYNC_CADENCE_MINUTES = 30;
 const SYNC_GRACE_MINUTES = 5;
 const BACKGROUND_REFRESH_MS = 45000;
 
-let state = { items: [], showCompleted: true, status: {} };
+let state = {
+  items: [],
+  showCompleted: true,
+  status: {},
+  // recordIds of cards whose inline note-entry box is currently open, and
+  // whose note log is currently expanded past the default 3-entry preview —
+  // kept outside `items` so a background refresh's full re-render doesn't
+  // silently close/collapse something the person has open.
+  openNoteEditors: new Set(),
+  expandedNotes: new Set(),
+};
 let editingRecordId = null;
 let lastSuccessfulSync = null;
 
@@ -191,6 +201,75 @@ function highlightMentionsHtml(str) {
   return escapeHtml(str).replace(/(?<!\w)@(\w+)/g, '<mark class="mention">@$1</mark>');
 }
 
+/* ---------------- Multi-entry note log ---------------- */
+// Each card's note/context field is a running, timestamped log rather than
+// a single blob: every "Meta" value is either legacy freeform text (from
+// before this feature existed) or a series of lines of the form
+// "⁣NOTE⁣{"t":"<ISO timestamp>","x":"<entry text>"}" — one per
+// entry, always appended at the end so entries read oldest-to-newest, new
+// ones below the previous ones, exactly like a running log.
+const NOTE_LINE_PREFIX = '⁣NOTE⁣';
+
+function formatEntryTimestamp(date) {
+  const now = new Date();
+  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (sameDay(date, now)) return `Today, ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(date, yesterday)) return `Yesterday, ${time}`;
+  return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
+// Parses a Meta string into an ordered array of {time: Date|null, text}.
+// Anything that isn't a recognized "⁣NOTE⁣{...}" line — including
+// every pre-existing note ever saved before this feature shipped — is
+// surfaced as a single untimestamped entry so nothing is ever lost or
+// mangled, it just shows up without a timestamp.
+function parseMetaEntries(meta) {
+  if (!meta) return [];
+  const lines = String(meta).split('\n');
+  const entries = [];
+  let legacyLines = [];
+  const flushLegacy = () => {
+    const text = legacyLines.join('\n').trim();
+    if (text) entries.push({ time: null, text });
+    legacyLines = [];
+  };
+  lines.forEach((line) => {
+    if (line.startsWith(NOTE_LINE_PREFIX)) {
+      flushLegacy();
+      let parsed = null;
+      try {
+        const obj = JSON.parse(line.slice(NOTE_LINE_PREFIX.length));
+        if (obj && typeof obj.x === 'string') parsed = obj;
+      } catch (e) { /* malformed — fall through and keep the raw line visible below */ }
+      if (parsed) {
+        entries.push({ time: parsed.t ? new Date(parsed.t) : null, text: parsed.x });
+      } else {
+        entries.push({ time: null, text: line });
+      }
+    } else {
+      legacyLines.push(line);
+    }
+  });
+  flushLegacy();
+  return entries;
+}
+
+// Appends one new timestamped entry to an existing Meta string.
+function appendMetaEntry(existingMeta, text) {
+  const line = NOTE_LINE_PREFIX + JSON.stringify({ t: new Date().toISOString(), x: text });
+  return existingMeta ? `${existingMeta}\n${line}` : line;
+}
+
+// Plain-text reconstruction used only for the read-only preview in the
+// full add/edit modal (see openModal) — never sent back to the server.
+function formatMetaPreview(meta) {
+  return parseMetaEntries(meta)
+    .map((e) => (e.time ? `[${formatEntryTimestamp(e.time)}] ${e.text}` : e.text))
+    .join('\n');
+}
+
 // Builds a "mention-aware textarea": a real (invisible-text) <textarea> for
 // native typing/caret/undo behavior, stacked over a backdrop <div> that
 // mirrors the same text with @tags highlighted. Returns a small controller
@@ -293,91 +372,138 @@ function renderItem(item) {
   return row;
 }
 
-// Renders either the existing note (with an "Edit note" affordance) or a
-// "+ Add note / context" button — right on the card, no need to open the
-// full editor first. Clicking either swaps in an inline textarea + Save/Cancel.
+// Renders a card's note/context section: a running log of timestamped
+// entries (oldest first, newest at the bottom) plus an "+ Add note"
+// trigger — every card gets this, right there, no need to open the full
+// editor first. More than 3 entries collapses to the latest 3 behind a
+// "▼ See N earlier" toggle so a new entry is always visible immediately
+// after being added, regardless of how long the log has gotten.
 function renderNoteWrap(item, container) {
   container.innerHTML = '';
 
-  if (item.meta) {
-    const metaRow = document.createElement('div');
-    metaRow.className = 'item-meta-row';
+  const entries = parseMetaEntries(item.meta);
+  const expanded = state.expandedNotes.has(item.recordId);
 
-    const meta = document.createElement('div');
-    meta.className = 'item-meta';
-    meta.innerHTML = highlightMentionsHtml(item.meta);
-    metaRow.appendChild(meta);
+  if (entries.length) {
+    const log = document.createElement('div');
+    log.className = 'note-log';
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'note-edit-btn';
-    editBtn.textContent = 'Edit note';
-    editBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openInlineNoteEditor(item, container);
+    const hiddenCount = entries.length - 3;
+    const showAll = expanded || hiddenCount <= 0;
+    const visible = showAll ? entries : entries.slice(-3);
+
+    if (hiddenCount > 0) {
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'note-toggle';
+      toggle.innerHTML = expanded
+        ? '<span class="note-toggle-arrow note-toggle-arrow-up">▲</span> Hide'
+        : `<span class="note-toggle-arrow">▼</span> See ${hiddenCount} earlier`;
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (expanded) state.expandedNotes.delete(item.recordId);
+        else state.expandedNotes.add(item.recordId);
+        renderNoteWrap(item, container);
+      });
+      log.appendChild(toggle);
+    }
+
+    visible.forEach((entry) => {
+      const row = document.createElement('div');
+      row.className = 'note-entry';
+      if (entry.time) {
+        const ts = document.createElement('span');
+        ts.className = 'note-entry-time';
+        ts.textContent = formatEntryTimestamp(entry.time);
+        row.appendChild(ts);
+      }
+      const txt = document.createElement('span');
+      txt.className = 'note-entry-text';
+      txt.innerHTML = highlightMentionsHtml(entry.text);
+      row.appendChild(txt);
+      log.appendChild(row);
     });
-    metaRow.appendChild(editBtn);
 
-    container.appendChild(metaRow);
+    container.appendChild(log);
+  }
+
+  if (state.openNoteEditors.has(item.recordId)) {
+    renderNoteInput(item, container, entries.length > 0);
   } else {
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'add-note-btn';
-    addBtn.textContent = '+ Add note / context';
+    addBtn.className = entries.length ? 'note-edit-btn' : 'add-note-btn';
+    addBtn.textContent = entries.length ? '+ Add note' : '+ Add note / context';
     addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      openInlineNoteEditor(item, container);
+      state.openNoteEditors.add(item.recordId);
+      renderNoteWrap(item, container);
     });
     container.appendChild(addBtn);
   }
 }
 
-function openInlineNoteEditor(item, container) {
-  container.innerHTML = '';
-  container.addEventListener('click', (e) => e.stopPropagation());
+// The single-line "add a note" box. Enter submits and appends a new
+// timestamped entry (staying open so another can be typed right away —
+// the entry that was just saved remains visible in the log above); Escape
+// or the ✕ closes it without adding anything.
+function renderNoteInput(item, container, hasEntries) {
+  const wrap = document.createElement('div');
+  wrap.className = 'note-input-row';
+  wrap.addEventListener('click', (e) => e.stopPropagation());
 
-  const field = createMentionField({ placeholder: 'Extra context, amounts, dates... Tag @context for something you want handled.', rows: 2 });
-  field.setValue(item.meta || '');
-
-  const actions = document.createElement('div');
-  actions.className = 'inline-note-actions';
-
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'ghost-btn small-btn';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', () => renderNoteWrap(item, container));
-
-  const saveBtn = document.createElement('button');
-  saveBtn.type = 'button';
-  saveBtn.className = 'primary-btn small-btn';
-  saveBtn.textContent = 'Save';
-  saveBtn.addEventListener('click', async () => {
-    const val = field.getValue().trim();
-    saveBtn.disabled = true;
-    cancelBtn.disabled = true;
-    try {
-      const result = await api('/api/items', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'update', recordId: item.recordId, meta: val }),
-      });
-      const idx = state.items.findIndex((it) => it.recordId === item.recordId);
-      if (idx !== -1) state.items[idx] = result.item;
-      // Full re-render so the row's other handlers (open-modal, checkbox)
-      // pick up the fresh item instead of a stale closure.
-      render();
-    } catch (err) {
-      alert('Could not save note: ' + err.message);
-      saveBtn.disabled = false;
-      cancelBtn.disabled = false;
-    }
+  const field = createMentionField({
+    placeholder: hasEntries ? 'Add another note…' : 'Add a note… tag @context for something you want handled.',
+    rows: 1,
   });
 
-  actions.appendChild(cancelBtn);
-  actions.appendChild(saveBtn);
-  container.appendChild(field.el);
-  container.appendChild(actions);
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'note-input-close';
+  closeBtn.title = 'Close';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.openNoteEditors.delete(item.recordId);
+    renderNoteWrap(item, container);
+  });
+
+  wrap.appendChild(field.el);
+  wrap.appendChild(closeBtn);
+  container.appendChild(wrap);
   field.focus();
+
+  const textareaEl = field.el.querySelector('.mention-input');
+  textareaEl.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') {
+      state.openNoteEditors.delete(item.recordId);
+      renderNoteWrap(item, container);
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const val = field.getValue().trim();
+      if (!val) return;
+      textareaEl.disabled = true;
+      try {
+        const newMeta = appendMetaEntry(item.meta, val);
+        const result = await api('/api/items', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'update', recordId: item.recordId, meta: newMeta }),
+        });
+        const idx = state.items.findIndex((it) => it.recordId === item.recordId);
+        if (idx !== -1) state.items[idx] = result.item;
+        // Keep the editor open — a full re-render below rebuilds this same
+        // card with the new entry now in its log and a fresh empty input
+        // ready for the next one.
+        state.openNoteEditors.add(item.recordId);
+        render();
+      } catch (err) {
+        alert('Could not save note: ' + err.message);
+        textareaEl.disabled = false;
+      }
+    }
+  });
 }
 
 async function toggleItem(item, checked) {
@@ -405,9 +531,25 @@ function openModal(item) {
   $('#modal-title').textContent = item ? 'Edit item' : 'Add item';
   $('#field-section').value = item ? item.section : '';
   $('#field-text').value = item ? item.text : '';
-  metaField.setValue(item ? item.meta : '');
   $('#field-link').value = item ? item.link : '';
   $('#field-urgent').checked = item ? item.urgent : false;
+
+  const metaTextarea = metaField.el.querySelector('.mention-input');
+  if (item) {
+    // Notes now live as a timestamped log right on the card itself (see
+    // renderNoteWrap/renderNoteInput) — showing the raw stored value here
+    // and letting it be edited would risk silently clobbering that whole
+    // history the next time this dialog is saved. Show a read-only plain-
+    // text reconstruction for reference only; add/edit notes from the card.
+    metaField.setValue(formatMetaPreview(item.meta));
+    metaTextarea.disabled = true;
+    $('#modal-meta-hint').textContent = 'Notes now live on the card itself — close this dialog and use "+ Add note" there.';
+  } else {
+    metaField.setValue('');
+    metaTextarea.disabled = false;
+    $('#modal-meta-hint').innerHTML = 'Tag <strong>@word</strong> (e.g. "@context") to flag a note as something for the assistant to act on, not just a note to yourself.';
+  }
+
   $('#modal-delete').classList.toggle('hidden', !item);
   resetDeleteConfirm();
   if (!item) $('#modal-delete').classList.add('hidden');
@@ -429,10 +571,16 @@ async function saveModal() {
   const payload = {
     section: $('#field-section').value.trim() || 'ADDED BY YOU',
     text,
-    meta: metaField.getValue().trim(),
     link: $('#field-link').value.trim(),
     urgent: $('#field-urgent').checked,
   };
+  // Meta is only ever set here for a brand-new item (the field is a
+  // read-only preview when editing an existing one — see openModal) so an
+  // edit-and-save never overwrites the card's real note log with this
+  // dialog's plain-text reconstruction of it.
+  if (!editingRecordId) {
+    payload.meta = metaField.getValue().trim();
+  }
 
   try {
     if (editingRecordId) {
@@ -626,10 +774,26 @@ function renderCalDayItems(dateStr, items) {
     text.className = 'cal-item-text';
     text.textContent = it.text;
     body.appendChild(text);
-    if (it.meta) {
+    // it.meta is a snapshot of the card's raw Meta value at the time of the
+    // 6am reset — parse it the same way the live card does so a multi-entry
+    // note log renders as readable stacked lines here too, instead of raw
+    // "⁣NOTE⁣{...}" blobs.
+    const snapEntries = parseMetaEntries(it.meta);
+    if (snapEntries.length) {
       const meta = document.createElement('div');
       meta.className = 'cal-item-meta';
-      meta.innerHTML = highlightMentionsHtml(it.meta);
+      snapEntries.forEach((entry, i) => {
+        if (i > 0) meta.appendChild(document.createElement('br'));
+        if (entry.time) {
+          const ts = document.createElement('span');
+          ts.className = 'note-entry-time';
+          ts.textContent = formatEntryTimestamp(entry.time);
+          meta.appendChild(ts);
+        }
+        const txt = document.createElement('span');
+        txt.innerHTML = highlightMentionsHtml(entry.text);
+        meta.appendChild(txt);
+      });
       body.appendChild(meta);
     }
     row.appendChild(body);

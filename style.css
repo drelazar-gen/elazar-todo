@@ -285,7 +285,6 @@ body {
 .item-body { flex: 1; min-width: 0; }
 .item-text { font-size: 15px; font-weight: 600; line-height: 1.4; letter-spacing: -0.005em; }
 .item-row.checked .item-text { text-decoration: line-through; }
-.item-meta { font-size: 13px; color: var(--text-dim); line-height: 1.4; }
 .item-link {
   display: inline-block;
   margin-top: 8px;
@@ -322,33 +321,86 @@ body {
   padding-top: 10px;
   border-top: 1px solid rgba(20, 20, 20, 0.5);
 }
-.item-meta-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.note-edit-btn {
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  font-size: 11.5px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  padding: 2px 0;
-  flex-shrink: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+
+/* The note log itself — a running list of timestamped entries, oldest on
+   top, newest at the bottom, exactly like a small activity feed. */
+.note-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
 }
-.note-edit-btn:hover { color: var(--accent-dark); }
-.add-note-btn {
+.note-entry { font-size: 13px; line-height: 1.45; }
+.note-entry-time {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-faint);
+  margin-right: 7px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.note-entry-text { color: var(--text-dim); }
+
+/* "▼ See N earlier" / "▲ Hide" — only appears once a card has more than
+   3 entries; keeps the latest entries (including one just typed) always
+   visible without the card growing unbounded. */
+.note-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: none;
   border: none;
   color: var(--accent-dark);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0 0 2px;
+}
+.note-toggle:hover { text-decoration: underline; }
+.note-toggle-arrow { font-size: 9px; line-height: 1; display: inline-block; }
+
+.note-edit-btn, .add-note-btn {
+  background: none;
+  border: none;
   font-family: inherit;
   cursor: pointer;
   padding: 0;
 }
+.note-edit-btn {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.note-edit-btn:hover { color: var(--accent-dark); }
+.add-note-btn { color: var(--accent-dark); font-size: 12.5px; font-weight: 700; }
 .add-note-btn:hover { text-decoration: underline; }
-.inline-note-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* Single-line "add a note" box — opens on click, stays open after Enter
+   (the just-saved entry appears in the log above, and a fresh empty box
+   is ready for the next one) until explicitly closed. */
+.note-input-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.note-input-row .mention-field { flex: 1; }
+.note-input-row .mention-input { resize: none; }
+.note-input-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 8px 4px;
+  line-height: 1;
+}
+.note-input-close:hover { color: var(--urgent); }
 
 /* Mention-aware textarea: a plain textarea (invisible text, real caret)
    stacked over a backdrop div that mirrors the same text with @tags
