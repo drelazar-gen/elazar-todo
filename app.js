@@ -15,7 +15,7 @@ const SYNC_CADENCE_MINUTES = 30;
 const SYNC_GRACE_MINUTES = 5;
 const BACKGROUND_REFRESH_MS = 45000;
 
-let state = { items: [], showCompleted: false, status: {} };
+let state = { items: [], showCompleted: true, status: {} };
 let editingRecordId = null;
 let lastSuccessfulSync = null;
 
@@ -259,13 +259,14 @@ function renderItem(item) {
     flag.textContent = 'URGENT';
     text.appendChild(flag);
   }
+  if (item.carriedOver && !item.checked) {
+    const flag = document.createElement('span');
+    flag.className = 'carried-over-flag';
+    flag.textContent = 'CARRIED OVER';
+    text.appendChild(flag);
+  }
   text.appendChild(document.createTextNode(item.text));
   body.appendChild(text);
-
-  const noteWrap = document.createElement('div');
-  noteWrap.className = 'item-note-wrap';
-  renderNoteWrap(item, noteWrap);
-  body.appendChild(noteWrap);
 
   if (item.link) {
     const link = document.createElement('a');
@@ -277,6 +278,13 @@ function renderItem(item) {
     link.addEventListener('click', (e) => e.stopPropagation());
     body.appendChild(link);
   }
+
+  // Note/context always sits at the very bottom of the card, below the link,
+  // so it's visible and editable right there without opening the item.
+  const noteWrap = document.createElement('div');
+  noteWrap.className = 'item-note-wrap';
+  renderNoteWrap(item, noteWrap);
+  body.appendChild(noteWrap);
 
   row.appendChild(checkbox);
   row.appendChild(body);
@@ -685,6 +693,7 @@ $('#logout-btn').addEventListener('click', async () => {
   showLogin();
 });
 
+$('#show-completed-toggle').textContent = state.showCompleted ? 'Hide completed' : 'Show completed';
 $('#show-completed-toggle').addEventListener('click', () => {
   state.showCompleted = !state.showCompleted;
   $('#show-completed-toggle').textContent = state.showCompleted ? 'Hide completed' : 'Show completed';

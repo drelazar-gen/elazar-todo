@@ -304,13 +304,23 @@ body {
   letter-spacing: 0.05em;
   vertical-align: middle;
 }
+.carried-over-flag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #b8791a;
+  margin-right: 7px;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
 
-/* Inline note / context — separated from the title with a thin, low-opacity
-   rule so it visually reads as part of the same card, not floating loose. */
+/* Inline note / context — sits at the very bottom of the card, below the
+   link, separated by a thin ~50%-opacity rule so it visually reads as part
+   of the same card without being mistaken for another item. */
 .item-note-wrap {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(20, 20, 20, 0.07);
+  border-top: 1px solid rgba(20, 20, 20, 0.5);
 }
 .item-meta-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .note-edit-btn {
