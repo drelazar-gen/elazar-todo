@@ -54,7 +54,7 @@
         <input type="text" id="quick-add-input" placeholder="Add an item… (start with EVENT: to put it on your calendar)" autocomplete="off" />
         <button type="submit" class="primary-btn">Add</button>
       </form>
-      <p class="event-hint">Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a full editor with a link and urgent flag.</p>
+      <p id="event-hint" class="event-hint">Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a full editor with a link and urgent flag.</p>
     </div>
 
     <main id="sections-container" class="sections-container"></main>
@@ -72,6 +72,7 @@
 
       <label>Title</label>
       <textarea id="field-text" rows="2" placeholder="What needs to happen?"></textarea>
+      <p id="field-text-hint" class="field-event-hint">Start with <strong>EVENT:</strong> to have this pushed to your calendar too.</p>
 
       <label>Note / context (optional)</label>
       <div id="field-meta-mount"></div>
