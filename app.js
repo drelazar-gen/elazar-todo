@@ -10,9 +10,14 @@ const PREFERRED_SECTION_ORDER = [
   'ADDED BY YOU',
 ];
 
-// Heartbeats are anchored to :25 and :55 UTC each hour (~every 30 min combined).
+// Heartbeats are anchored to :25 and :55 UTC each hour (~every 30 min combined)
+// — this cadence only matters now as the FALLBACK path, when the extension
+// itself looks down and Heartbeat A steps in to do a manual scan.
 const SYNC_CADENCE_MINUTES = 30;
 const SYNC_GRACE_MINUTES = 5;
+// The extension pings its own "I'm alive" timestamp every 5 minutes — this
+// is the primary signal now. Allow for one missed cycle plus slack.
+const EXTENSION_PING_STALE_MINUTES = 12;
 const BACKGROUND_REFRESH_MS = 45000;
 
 let state = {
@@ -30,6 +35,25 @@ let editingRecordId = null;
 let lastSuccessfulSync = null;
 
 const $ = (sel) => document.querySelector(sel);
+
+// Live-highlights a text field + its hint paragraph whenever the field's
+// value starts with "EVENT:" (case-insensitive) — that prefix is what the
+// automated check-in scans for to push an item onto the calendar (see the
+// "EVENT:" markers step in the assistant's check-in). Returns the update
+// function so callers can re-run it manually after programmatically
+// changing the field's value (e.g. clearing it after submit, or loading a
+// different item into the edit modal), since those don't fire 'input'.
+function watchForEventPrefix(fieldEl, hintEl, defaultHTML, activeHTML) {
+  const update = () => {
+    const isEvent = /^event:/i.test(fieldEl.value.trim());
+    fieldEl.classList.toggle('event-detected', isEvent);
+    hintEl.classList.toggle('event-active', isEvent);
+    hintEl.innerHTML = isEvent ? activeHTML : defaultHTML;
+  };
+  fieldEl.addEventListener('input', update);
+  update();
+  return update;
+}
 
 async function api(path, opts) {
   const res = await fetch(path, {
@@ -105,35 +129,65 @@ function setSyncPill(healthy, detail) {
   }
 }
 
-function updateChannelPill(el, label, iso) {
-  if (!el) return;
-  const now = new Date();
+function minutesAgo(iso) {
+  return (Date.now() - new Date(iso).getTime()) / 60000;
+}
 
-  if (!iso) {
-    el.className = 'pill pill-sm pill-red';
-    el.textContent = `${label} — no check-in yet`;
-    return;
+function formatRelative(iso) {
+  const mins = minutesAgo(iso);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${Math.round(mins)}m ago`;
+  const now = new Date();
+  const d = new Date(iso);
+  const hrs = mins / 60;
+  if (hrs < 24 && sameDay(d, now)) return `${Math.round(hrs)}h ago`;
+  return formatPillTime(d, true);
+}
+
+// The capture "engine" is a single thing (one Chrome extension covers both
+// WhatsApp and Google Messages), so both channel pills share this same
+// health check — they only differ in their "last message" text below.
+// Primary signal: the extension's own 5-minute heartbeat ping. If that's
+// gone stale, fall back to checking whether Heartbeat A's manual-scan
+// markers are fresh on their own 30-min cadence — which would mean Heartbeat
+// A has correctly stepped in as the fallback, so things are still fine, just
+// via the older path.
+function captureEngineHealth() {
+  const ext = state.status.extensionHeartbeat;
+  if (ext && minutesAgo(ext) <= EXTENSION_PING_STALE_MINUTES) {
+    return { healthy: true, via: 'extension', pingIso: ext };
   }
 
-  const last = new Date(iso);
+  const now = new Date();
   const scheduled = lastScheduledMark(now);
   const graceMs = SYNC_GRACE_MINUTES * 60 * 1000;
-  const healthy = last.getTime() >= scheduled.getTime() - graceMs;
+  const waFallback = state.status.whatsapp && new Date(state.status.whatsapp).getTime() >= scheduled.getTime() - graceMs;
+  const gmFallback = state.status.messages && new Date(state.status.messages).getTime() >= scheduled.getTime() - graceMs;
+  if (waFallback || gmFallback) {
+    return { healthy: true, via: 'fallback', pingIso: state.status.whatsapp || state.status.messages };
+  }
 
-  if (healthy) {
+  return { healthy: false, via: null, pingIso: null };
+}
+
+function updateChannelPill(el, label, lastCaptureIso) {
+  if (!el) return;
+  const engine = captureEngineHealth();
+  const lastMsgText = lastCaptureIso ? `last message ${formatRelative(lastCaptureIso)}` : 'no messages captured yet';
+
+  if (engine.healthy) {
     el.className = 'pill pill-sm pill-green';
-    el.textContent = `${label} — synced ${formatPillTime(last, !sameDay(last, now))}`;
+    const viaText = engine.via === 'extension' ? 'live via extension' : 'live via fallback scan';
+    el.textContent = `${label} — ${viaText} · ${lastMsgText}`;
   } else {
     el.className = 'pill pill-sm pill-red';
-    const lastStr = formatPillTime(last, !sameDay(last, now));
-    const expStr = formatPillTime(scheduled, !sameDay(scheduled, now));
-    el.textContent = `${label} — offline · last ${lastStr} · expected ${expStr}`;
+    el.textContent = `${label} — capture offline · check the extension · ${lastMsgText}`;
   }
 }
 
 function refreshStatusPills() {
-  updateChannelPill($('#whatsapp-pill'), 'WhatsApp', state.status.whatsapp);
-  updateChannelPill($('#messages-pill'), 'Messages', state.status.messages);
+  updateChannelPill($('#whatsapp-pill'), 'WhatsApp', state.status.whatsappLastCapture);
+  updateChannelPill($('#messages-pill'), 'Messages', state.status.messagesLastCapture);
 }
 
 /* ---------------- Rendering ---------------- */
@@ -539,6 +593,7 @@ function openModal(item) {
   $('#field-text').value = item ? item.text : '';
   $('#field-link').value = item ? item.link : '';
   $('#field-urgent').checked = item ? item.urgent : false;
+  updateFieldTextEventHint();
 
   const metaTextarea = metaField.el.querySelector('.mention-input');
   if (item) {
@@ -935,6 +990,13 @@ $('#show-completed-toggle').addEventListener('click', () => {
   render();
 });
 
+const updateQuickAddEventHint = watchForEventPrefix(
+  $('#quick-add-input'),
+  $('#event-hint'),
+  'Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a full editor with a link and urgent flag.',
+  '📅 <strong>This will be added to your calendar</strong> — the next automated check-in picks up "EVENT:" items and creates them there.'
+);
+
 $('#quick-add-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = $('#quick-add-input');
@@ -948,6 +1010,7 @@ $('#quick-add-form').addEventListener('submit', async (e) => {
       body: JSON.stringify({ action: 'create', text, section: 'ADDED BY YOU' }),
     });
     input.value = '';
+    updateQuickAddEventHint();
     await loadItems();
   } catch (err) {
     alert('Could not add: ' + err.message);
@@ -955,6 +1018,13 @@ $('#quick-add-form').addEventListener('submit', async (e) => {
     submitBtn.disabled = false;
   }
 });
+
+const updateFieldTextEventHint = watchForEventPrefix(
+  $('#field-text'),
+  $('#field-text-hint'),
+  'Start with <strong>EVENT:</strong> to have this pushed to your calendar too.',
+  '📅 <strong>This will be added to your calendar</strong> when the next automated check-in runs.'
+);
 
 $('#add-fab').addEventListener('click', () => openModal(null));
 $('#modal-cancel').addEventListener('click', closeModal);
