@@ -12,6 +12,8 @@
   --accent-bg: #e7f4ee;
   --urgent: #c0392b;
   --urgent-bg: #fdeeec;
+  --event: #6d4aa8;
+  --event-bg: #f1ecf9;
   --shadow-sm: 0 1px 2px rgba(20, 20, 20, 0.04), 0 1px 1px rgba(20, 20, 20, 0.03);
   --shadow-md: 0 8px 24px rgba(20, 20, 20, 0.07), 0 2px 6px rgba(20, 20, 20, 0.04);
   --shadow-lg: 0 20px 48px rgba(20, 20, 20, 0.14), 0 6px 16px rgba(20, 20, 20, 0.06);
@@ -171,9 +173,66 @@ body {
 .danger-btn:hover { background: var(--urgent-bg); }
 .small-btn { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; box-shadow: none; }
 .icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; }
+
+/* Calendar toggle: a mini calendar-icon widget showing today's actual
+   live date (month + day, refreshed in app.js) instead of a generic
+   emoji — sized up so it reads clearly as its own button and doubles as
+   an at-a-glance "what day is it" indicator. */
+.calendar-date-btn {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+.calendar-date-btn:hover { border-color: #dcdbd5; }
+.calendar-date-btn .cal-hangers {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+}
+.calendar-date-btn .cal-hangers span {
+  width: 5px;
+  height: 8px;
+  border-radius: 2px;
+  background: #aeb2ba;
+}
+.calendar-date-btn .cal-header {
+  background: #d93025;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 6px 0 4px;
+  text-align: center;
+}
+.calendar-date-btn .cal-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text);
+}
 /* Calendar toggle is the primary secondary-action here — sized up so it
    reads clearly as its own button rather than blending into the row. */
-#calendar-btn { font-size: 22px; padding: 6px 13px; }
 
 /* Status pills */
 .status-pills { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -243,7 +302,9 @@ body {
   .status-pills { margin-top: 10px; gap: 6px; }
   .pill-lg { font-size: 12px; padding: 8px 14px; }
   .pill-sm { font-size: 10.5px; padding: 5px 10px; }
-  #calendar-btn { font-size: 20px; padding: 5px 11px; }
+  .calendar-date-btn { width: 40px; height: 40px; border-radius: 10px; }
+  .calendar-date-btn .cal-header { font-size: 9px; padding: 5px 0 3px; }
+  .calendar-date-btn .cal-body { font-size: 16px; }
 }
 
 /* Quick add */
@@ -265,8 +326,20 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
+/* Typing "EVENT:" (case-insensitive) at the start flags this item for the
+   automated check-in to push onto the calendar — see updateEventDetection()
+   in app.js. Purple is used nowhere else in the app so it reads as its own
+   distinct signal, separate from urgent (red) or carried-over (amber). */
+.quick-add-row input.event-detected,
+.quick-add-row input.event-detected:focus {
+  border-color: var(--event);
+  background: var(--event-bg);
+  box-shadow: 0 0 0 3px var(--event-bg);
+}
 .quick-add-row button { flex-shrink: 0; }
-.event-hint { font-size: 12px; color: var(--text-faint); margin: 9px 4px 0; line-height: 1.5; }
+.event-hint { font-size: 12px; color: var(--text-faint); margin: 9px 4px 0; line-height: 1.5; transition: color 0.15s ease; }
+.event-hint.event-active { color: var(--event); font-weight: 600; }
+.event-hint.event-active strong { color: var(--event); }
 
 .section-block { margin-bottom: 26px; }
 .section-title {
@@ -563,6 +636,16 @@ mark.mention {
   box-shadow: 0 0 0 3px var(--accent-bg);
   background: white;
 }
+/* Same "this becomes a calendar event" signal as the quick-add bar — see
+   .quick-add-row input.event-detected and updateEventDetection() in app.js. */
+#field-text.event-detected,
+#field-text.event-detected:focus {
+  border-color: var(--event);
+  background: var(--event-bg);
+  box-shadow: 0 0 0 3px var(--event-bg);
+}
+.field-event-hint { font-size: 12px; color: var(--text-faint); margin: 7px 2px 0; line-height: 1.4; transition: color 0.15s ease; }
+.field-event-hint.event-active { color: var(--event); font-weight: 600; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: none; font-weight: 500; color: var(--text); }
 .checkbox-row input { width: auto; }
 
