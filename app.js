@@ -36,6 +36,26 @@ let lastSuccessfulSync = null;
 
 const $ = (sel) => document.querySelector(sel);
 
+// Keeps the calendar-icon button's face showing today's REAL live date
+// (e.g. "AUG" / "24") instead of a static emoji — matches how a physical
+// desk calendar or the iOS/Google Calendar app icon works. Uses Elazar's
+// Florida time zone so it flips over at Eastern midnight, consistent with
+// SNAPDATE elsewhere in this system, regardless of the viewer's own clock.
+function updateCalendarButtonDate() {
+  const monthEl = document.getElementById('calendar-btn-month');
+  const dayEl = document.getElementById('calendar-btn-day');
+  if (!monthEl || !dayEl) return;
+  const now = new Date();
+  const month = now.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/New_York' });
+  const day = now.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/New_York' });
+  monthEl.textContent = month.toUpperCase();
+  dayEl.textContent = day;
+}
+updateCalendarButtonDate();
+// Cheap periodic check so the date rolls over automatically if the page
+// is left open across midnight, without needing a full page refresh.
+setInterval(updateCalendarButtonDate, 5 * 60000);
+
 // Live-highlights a text field + its hint paragraph whenever the field's
 // value starts with "EVENT:" (case-insensitive) — that prefix is what the
 // automated check-in scans for to push an item onto the calendar (see the

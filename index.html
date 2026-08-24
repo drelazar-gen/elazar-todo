@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Elazar — To-Do List</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6.3' y='0.8' width='2' height='3.6' rx='1' fill='%238a8f98'/%3E%3Crect x='15.7' y='0.8' width='2' height='3.6' rx='1' fill='%238a8f98'/%3E%3Crect x='1.5' y='2.5' width='21' height='20' rx='4' fill='%23ffffff' stroke='%23d8d8d8' stroke-width='0.6'/%3E%3Cpath d='M1.5 6.5a4 4 0 0 1 4-4h13a4 4 0 0 1 4 4v3h-21z' fill='%23d93025'/%3E%3Cpath d='M1.5 6.5a4 4 0 0 1 4-4h1.2v7h-5.2z' fill='%23b1271b'/%3E%3Ccircle cx='12' cy='15' r='5.6' fill='%231f7a56'/%3E%3Cpath d='M9.2 15.1l2 2 3.6-4.2' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -34,7 +35,11 @@
           <div id="updated-label" class="updated-label"></div>
         </div>
         <div class="header-actions">
-          <button id="calendar-btn" class="ghost-btn icon-btn" title="Calendar">📅</button>
+          <button id="calendar-btn" class="calendar-date-btn" title="Calendar">
+            <span class="cal-hangers"><span></span><span></span></span>
+            <span class="cal-header" id="calendar-btn-month">—</span>
+            <span class="cal-body" id="calendar-btn-day">–</span>
+          </button>
           <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
           <button id="logout-btn" class="ghost-btn">Log out</button>
         </div>
