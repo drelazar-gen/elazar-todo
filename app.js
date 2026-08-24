@@ -44,6 +44,17 @@ const $ = (sel) => document.querySelector(sel);
 // changing the field's value (e.g. clearing it after submit, or loading a
 // different item into the edit modal), since those don't fire 'input'.
 function watchForEventPrefix(fieldEl, hintEl, defaultHTML, activeHTML) {
+  // Defensive: if either element is missing (e.g. index.html and app.js
+  // drifted out of sync — this happened for real on 2026-08-24, when a
+  // missing #event-hint/#field-text-hint silently crashed this call and, by
+  // extension, EVERY addEventListener wiring further down the file,
+  // including the calendar button), degrade to a no-op instead of throwing.
+  // One missing hint element should never be able to take down the rest of
+  // the page's buttons.
+  if (!fieldEl || !hintEl) {
+    console.warn('[Elazar Todo] watchForEventPrefix: missing element(s) — skipping EVENT: highlighting for this field so the rest of the page still wires up.');
+    return () => {};
+  }
   const update = () => {
     const isEvent = /^event:/i.test(fieldEl.value.trim());
     fieldEl.classList.toggle('event-detected', isEvent);
