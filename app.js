@@ -429,10 +429,24 @@ function renderDelegateStatusRow(item) {
   }
 
   if (!item.checked) {
+    const nudgeInfo = document.createElement('span');
+    nudgeInfo.className = 'note-entry-time';
+    if (item.nudgeMode === 'Auto') {
+      const label = item.nudgeInterval === 'Custom' && item.nudgeCustomDays
+        ? `every ${item.nudgeCustomDays} day${item.nudgeCustomDays === 1 ? '' : 's'}`
+        : `every ${(item.nudgeInterval || 'day').toLowerCase()}`;
+      nudgeInfo.textContent = `Auto-nudging ${label}`;
+    } else {
+      nudgeInfo.textContent = 'Manual nudges';
+    }
+    wrap.appendChild(nudgeInfo);
+  }
+
+  if (!item.checked) {
     const nudgeBtn = document.createElement('button');
     nudgeBtn.type = 'button';
     nudgeBtn.className = 'delegate-nudge-btn';
-    nudgeBtn.textContent = 'Nudge';
+    nudgeBtn.textContent = 'Nudge now';
     nudgeBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       nudgeBtn.disabled = true;
@@ -446,7 +460,7 @@ function renderDelegateStatusRow(item) {
       } catch (err) {
         alert('Could not send nudge: ' + err.message);
         nudgeBtn.disabled = false;
-        nudgeBtn.textContent = 'Nudge';
+        nudgeBtn.textContent = 'Nudge now';
       }
     });
     wrap.appendChild(nudgeBtn);
@@ -550,7 +564,40 @@ function formatMetaPreview(meta) {
 // "(every day/week/month/N days)" suffix that the server's parseNoteTags()
 // regex expects, so the whole thing round-trips without Elazar needing to
 // know the exact syntax.
-function createMentionField({ placeholder, rows, recurPicker } = {}) {
+// todoMenu: true wires up a Claude-"/"-style command menu that pops open the
+// moment "@todo" is typed — a filterable list of every @todo sub-function,
+// navigable with arrow keys + Enter, or click. Picking "Delegate to…" walks
+// through a contact search/add-new step and a nudge-interval step right
+// inside the same popup, ending with the fully-formed tag inserted in one go.
+
+// The function list shown by the @todo command menu. `insert` is the exact
+// text appended after "@todo " for the simple (non-delegate) entries, and is
+// also used to detect "this one's already been picked" (see updateTodoMenu)
+// so the menu doesn't keep popping back up while typing the rest of a tag.
+const TODO_FUNCTIONS = [
+  { key: 'recurring', label: 'Make recurring', hint: 'Reset back to unchecked on a schedule', insert: 'make recurring' },
+  { key: 'archive', label: 'Archive when done', hint: 'Move to Archived once checked off', insert: 'archive when done' },
+  { key: 'delegate', label: 'Delegate to…', hint: 'Send to someone as their own checklist item', insert: 'delegate to', delegateFlow: true },
+  { key: 'remind', label: 'Remind me…', hint: 'e.g. "remind me in 3 days" — whether or not it\'s checked off', insert: 'remind me in ' },
+  { key: 'escalate', label: 'Escalate if still open…', hint: 'Flags it again only if it\'s still unchecked by then', insert: 'escalate if still open ' },
+];
+
+// Finds the "@todo…" token the caret is actively sitting inside/at the end
+// of, if any — mirrors how a "/" command menu only shows while you're
+// actively typing the command right at the cursor. Returns {start, query}
+// (start = index of "@", query = lowercased text typed after "@todo" so
+// far) or null if the caret isn't in such a spot.
+function locateTodoToken(value, caretPos) {
+  const uptoCaret = value.slice(0, caretPos);
+  const idx = uptoCaret.toLowerCase().lastIndexOf('@todo');
+  if (idx === -1) return null;
+  if (idx > 0 && !/\s/.test(uptoCaret[idx - 1])) return null; // must start a word
+  const after = uptoCaret.slice(idx + 5);
+  if (/[\n@()]/.test(after) || after.length > 40) return null; // typing moved past this token
+  return { start: idx, end: caretPos, query: after.trim().toLowerCase() };
+}
+
+function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'mention-field';
 
@@ -625,6 +672,376 @@ function createMentionField({ placeholder, rows, recurPicker } = {}) {
     });
   }
 
+  /* ---- @todo command menu ---- */
+  let menu = null;
+  let inDelegateFlow = false;
+  let delegateState = null; // { token, contact, nudgeMode, nudgeInterval, nudgeCustomDays }
+  let functionListButtons = [];
+  let highlightedIndex = 0;
+
+  if (todoMenu) {
+    menu = document.createElement('div');
+    menu.className = 'todo-menu hidden';
+  }
+
+  function closeTodoMenu() {
+    if (!menu) return;
+    menu.classList.add('hidden');
+    menu.innerHTML = '';
+    inDelegateFlow = false;
+    delegateState = null;
+    functionListButtons = [];
+  }
+
+  function insertAtToken(token, text) {
+    const before = textarea.value.slice(0, token.start);
+    const after = textarea.value.slice(token.end);
+    textarea.value = before + text + after;
+    sync();
+    textarea.focus();
+    const pos = (before + text).length;
+    textarea.setSelectionRange(pos, pos);
+  }
+
+  function updateHighlight() {
+    functionListButtons.forEach((el, i) => el.classList.toggle('todo-menu-item-highlighted', i === highlightedIndex));
+  }
+
+  function renderFunctionList(token) {
+    const q = token.query;
+    const matches = TODO_FUNCTIONS.filter((fn) => !q || fn.label.toLowerCase().includes(q) || fn.key.includes(q));
+    if (!matches.length) { closeTodoMenu(); return; }
+    highlightedIndex = 0;
+    menu.classList.remove('hidden');
+    menu.innerHTML = '';
+    const list = document.createElement('div');
+    list.className = 'todo-menu-list';
+    matches.forEach((fn, i) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'todo-menu-item' + (i === 0 ? ' todo-menu-item-highlighted' : '');
+      row.innerHTML = `<span class="todo-menu-item-label">${escapeHtml(fn.label)}</span><span class="todo-menu-item-hint">${escapeHtml(fn.hint)}</span>`;
+      row.addEventListener('mousedown', (e) => e.preventDefault());
+      row.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (fn.delegateFlow) {
+          inDelegateFlow = true;
+          delegateState = { token, contact: null, nudgeMode: 'manual', nudgeInterval: 'Daily', nudgeCustomDays: null };
+          renderContactSearchStep();
+        } else {
+          insertAtToken(token, `@todo ${fn.insert}`);
+          closeTodoMenu();
+        }
+      });
+      list.appendChild(row);
+    });
+    functionListButtons = Array.from(list.children);
+    menu.appendChild(list);
+  }
+
+  async function renderContactSearchStep() {
+    menu.classList.remove('hidden');
+    menu.innerHTML = '';
+    const step = document.createElement('div');
+    step.className = 'todo-menu-step';
+
+    const label = document.createElement('div');
+    label.className = 'todo-menu-step-label';
+    label.textContent = 'Delegate to…';
+    step.appendChild(label);
+
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'todo-menu-search';
+    searchInput.placeholder = 'Search contacts…';
+    searchInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    searchInput.addEventListener('click', (e) => e.stopPropagation());
+    step.appendChild(searchInput);
+
+    const results = document.createElement('div');
+    results.className = 'todo-menu-list';
+    step.appendChild(results);
+
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'ghost-btn small-btn todo-menu-back';
+    backBtn.textContent = '← Back';
+    backBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    backBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inDelegateFlow = false;
+      renderFunctionList(delegateState.token);
+    });
+    step.appendChild(backBtn);
+
+    menu.appendChild(step);
+
+    let debounceTimer = null;
+    async function runSearch(q) {
+      results.innerHTML = '<div class="todo-menu-loading">Searching…</div>';
+      try {
+        const data = await api(`/api/contacts?q=${encodeURIComponent(q)}`);
+        renderContactResults(q, data.contacts || []);
+      } catch (err) {
+        results.innerHTML = `<div class="todo-menu-loading">Could not search: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderContactResults(q, contacts) {
+      results.innerHTML = '';
+      contacts.forEach((c) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'todo-menu-item';
+        item.innerHTML = `<span class="todo-menu-item-label">${escapeHtml(c.name)}</span><span class="todo-menu-item-hint">${escapeHtml(c.email || c.phone || '')}</span>`;
+        item.addEventListener('mousedown', (e) => e.preventDefault());
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          delegateState.contact = c;
+          renderNudgeStep();
+        });
+        results.appendChild(item);
+      });
+      const addNew = document.createElement('button');
+      addNew.type = 'button';
+      addNew.className = 'todo-menu-item todo-menu-add-new';
+      addNew.innerHTML = `<span class="todo-menu-item-label">+ Add "${escapeHtml(q || 'new contact')}"</span><span class="todo-menu-item-hint">New contact</span>`;
+      addNew.addEventListener('mousedown', (e) => e.preventDefault());
+      addNew.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        renderAddContactStep(q);
+      });
+      results.appendChild(addNew);
+    }
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = searchInput.value;
+      debounceTimer = setTimeout(() => runSearch(q), 200);
+    });
+
+    runSearch('');
+    setTimeout(() => searchInput.focus(), 0);
+  }
+
+  function renderAddContactStep(prefillName) {
+    menu.innerHTML = '';
+    const step = document.createElement('div');
+    step.className = 'todo-menu-step';
+
+    const label = document.createElement('div');
+    label.className = 'todo-menu-step-label';
+    label.textContent = 'Add new contact';
+    step.appendChild(label);
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text'; nameInput.className = 'todo-menu-field'; nameInput.placeholder = 'Name'; nameInput.value = prefillName || '';
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email'; emailInput.className = 'todo-menu-field'; emailInput.placeholder = 'Email';
+    const phoneInput = document.createElement('input');
+    phoneInput.type = 'tel'; phoneInput.className = 'todo-menu-field'; phoneInput.placeholder = 'Phone (optional)';
+    [nameInput, emailInput, phoneInput].forEach((inp) => {
+      inp.addEventListener('mousedown', (e) => e.stopPropagation());
+      inp.addEventListener('click', (e) => e.stopPropagation());
+      step.appendChild(inp);
+    });
+
+    const err = document.createElement('div');
+    err.className = 'todo-menu-error hidden';
+    step.appendChild(err);
+
+    const actions = document.createElement('div');
+    actions.className = 'todo-menu-actions';
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button'; backBtn.className = 'ghost-btn small-btn'; backBtn.textContent = '← Back';
+    backBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    backBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); renderContactSearchStep(); });
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button'; addBtn.className = 'primary-btn small-btn'; addBtn.textContent = 'Add & continue';
+    addBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    addBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const name = nameInput.value.trim();
+      if (!name) { err.textContent = 'Name is required.'; err.classList.remove('hidden'); return; }
+      addBtn.disabled = true;
+      addBtn.textContent = 'Adding…';
+      try {
+        const data = await api('/api/contacts', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'create', name, email: emailInput.value.trim(), phone: phoneInput.value.trim() }),
+        });
+        delegateState.contact = data.contact;
+        renderNudgeStep();
+      } catch (err2) {
+        err.textContent = err2.message || 'Could not add contact.';
+        err.classList.remove('hidden');
+        addBtn.disabled = false;
+        addBtn.textContent = 'Add & continue';
+      }
+    });
+    actions.appendChild(backBtn);
+    actions.appendChild(addBtn);
+    step.appendChild(actions);
+
+    menu.appendChild(step);
+    setTimeout(() => nameInput.focus(), 0);
+  }
+
+  function renderNudgeStep() {
+    menu.innerHTML = '';
+    const step = document.createElement('div');
+    step.className = 'todo-menu-step';
+
+    const label = document.createElement('div');
+    label.className = 'todo-menu-step-label';
+    label.textContent = `Delegating to ${delegateState.contact.name} — reminder nudges?`;
+    step.appendChild(label);
+
+    const modeRow = document.createElement('div');
+    modeRow.className = 'todo-nudge-mode-row';
+    const manualBtn = document.createElement('button');
+    manualBtn.type = 'button'; manualBtn.className = 'todo-nudge-mode-btn active'; manualBtn.textContent = 'Manual only';
+    const autoBtn = document.createElement('button');
+    autoBtn.type = 'button'; autoBtn.className = 'todo-nudge-mode-btn'; autoBtn.textContent = 'Auto-nudge';
+    modeRow.appendChild(manualBtn);
+    modeRow.appendChild(autoBtn);
+    step.appendChild(modeRow);
+
+    const intervalRow = document.createElement('div');
+    intervalRow.className = 'recur-picker hidden';
+    intervalRow.innerHTML =
+      '<span class="recur-picker-label">Every:</span>' +
+      '<button type="button" data-interval="Daily">Daily</button>' +
+      '<button type="button" data-interval="Weekly">Weekly</button>' +
+      '<button type="button" data-interval="Monthly">Monthly</button>' +
+      '<button type="button" data-interval="Custom">Custom</button>' +
+      '<span class="recur-custom-row hidden"><input type="number" min="1" class="recur-custom-input" placeholder="days" /><button type="button" class="recur-custom-confirm">Set</button></span>';
+    step.appendChild(intervalRow);
+
+    [manualBtn, autoBtn].forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()));
+    manualBtn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      delegateState.nudgeMode = 'manual';
+      manualBtn.classList.add('active'); autoBtn.classList.remove('active');
+      intervalRow.classList.add('hidden');
+    });
+    autoBtn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      delegateState.nudgeMode = 'auto';
+      autoBtn.classList.add('active'); manualBtn.classList.remove('active');
+      intervalRow.classList.remove('hidden');
+      intervalRow.querySelector('button[data-interval="Daily"]').classList.add('recur-selected');
+    });
+
+    intervalRow.querySelectorAll('button[data-interval]').forEach((btn) => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const kind = btn.getAttribute('data-interval');
+        if (kind === 'Custom') {
+          intervalRow.querySelector('.recur-custom-row').classList.remove('hidden');
+          intervalRow.querySelector('.recur-custom-input').focus();
+          return;
+        }
+        delegateState.nudgeInterval = kind;
+        delegateState.nudgeCustomDays = null;
+        intervalRow.querySelectorAll('button[data-interval]').forEach((b) => b.classList.remove('recur-selected'));
+        btn.classList.add('recur-selected');
+        intervalRow.querySelector('.recur-custom-row').classList.add('hidden');
+      });
+    });
+    const customInput = intervalRow.querySelector('.recur-custom-input');
+    const customConfirm = intervalRow.querySelector('.recur-custom-confirm');
+    customInput.addEventListener('mousedown', (e) => e.stopPropagation());
+    customInput.addEventListener('click', (e) => e.stopPropagation());
+    const confirmCustom = () => {
+      const n = parseInt(customInput.value, 10);
+      if (!n || n < 1) { customInput.focus(); return; }
+      delegateState.nudgeInterval = 'Custom';
+      delegateState.nudgeCustomDays = n;
+      intervalRow.querySelectorAll('button[data-interval]').forEach((b) => b.classList.remove('recur-selected'));
+      intervalRow.querySelector('button[data-interval="Custom"]').classList.add('recur-selected');
+    };
+    customConfirm.addEventListener('mousedown', (e) => e.preventDefault());
+    customConfirm.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); confirmCustom(); });
+    customInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmCustom(); } });
+
+    const actions = document.createElement('div');
+    actions.className = 'todo-menu-actions';
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button'; backBtn.className = 'ghost-btn small-btn'; backBtn.textContent = '← Back';
+    backBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    backBtn.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); renderContactSearchStep(); });
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button'; doneBtn.className = 'primary-btn small-btn'; doneBtn.textContent = 'Delegate';
+    doneBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    doneBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { token, contact, nudgeMode, nudgeInterval, nudgeCustomDays } = delegateState;
+      let nudgeText = 'manual';
+      if (nudgeMode === 'auto') {
+        nudgeText = (nudgeInterval === 'Custom' && nudgeCustomDays)
+          ? `auto every ${nudgeCustomDays} day${nudgeCustomDays === 1 ? '' : 's'}`
+          : `auto every ${nudgeInterval.toLowerCase()}`;
+      }
+      insertAtToken(token, `@todo delegate to ${contact.name} (nudge: ${nudgeText})`);
+      closeTodoMenu();
+    });
+    actions.appendChild(backBtn);
+    actions.appendChild(doneBtn);
+    step.appendChild(actions);
+
+    menu.appendChild(step);
+  }
+
+  function updateTodoMenu() {
+    if (!menu || inDelegateFlow) return;
+    const caret = textarea.selectionStart;
+    const token = locateTodoToken(textarea.value, caret);
+    if (!token) { closeTodoMenu(); return; }
+    const q = token.query;
+    // Already mid-way through typing a recognized tag (e.g. picked "Remind
+    // me…" and now typing the actual date) — don't pop back up over it.
+    const alreadyChosen = TODO_FUNCTIONS.some((fn) => q.startsWith(fn.insert.trim().toLowerCase()));
+    if (alreadyChosen) { closeTodoMenu(); return; }
+    renderFunctionList(token);
+  }
+
+  if (menu) {
+    textarea.addEventListener('keydown', (e) => {
+      if (!menu || menu.classList.contains('hidden') || inDelegateFlow) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        highlightedIndex = Math.min(highlightedIndex + 1, functionListButtons.length - 1);
+        updateHighlight();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        highlightedIndex = Math.max(highlightedIndex - 1, 0);
+        updateHighlight();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const el = functionListButtons[highlightedIndex];
+        if (el) el.click();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        closeTodoMenu();
+      }
+    });
+    textarea.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (!wrap.contains(document.activeElement)) closeTodoMenu();
+      }, 150);
+    });
+  }
+
   function sync() {
     const val = textarea.value;
     // Trailing newline(s) collapse in a plain div — pad so the backdrop's
@@ -632,6 +1049,7 @@ function createMentionField({ placeholder, rows, recurPicker } = {}) {
     backdrop.innerHTML = highlightMentionsHtml(val) + (/\n$/.test(val) ? '&nbsp;' : '');
     backdrop.scrollTop = textarea.scrollTop;
     updateRecurPicker();
+    updateTodoMenu();
   }
 
   textarea.addEventListener('input', sync);
@@ -640,6 +1058,7 @@ function createMentionField({ placeholder, rows, recurPicker } = {}) {
   wrap.appendChild(backdrop);
   wrap.appendChild(textarea);
   if (picker) wrap.appendChild(picker);
+  if (menu) wrap.appendChild(menu);
   sync();
 
   return {
@@ -647,14 +1066,16 @@ function createMentionField({ placeholder, rows, recurPicker } = {}) {
     getValue: () => textarea.value,
     setValue: (v) => { textarea.value = v || ''; sync(); },
     focus: () => textarea.focus(),
+    isMenuOpen: () => !!(menu && !menu.classList.contains('hidden')),
   };
 }
 
 // Single reusable mention field mounted into the add/edit modal.
 const metaField = createMentionField({
-  placeholder: 'Extra context, amounts, dates... Tag @context for something you want handled.',
+  placeholder: 'Extra context, amounts, dates... Tag @context for something you want handled. Type @todo for a menu of functions.',
   rows: 3,
   recurPicker: true,
+  todoMenu: true,
 });
 $('#field-meta-mount').appendChild(metaField.el);
 
@@ -805,9 +1226,10 @@ function renderNoteInput(item, container, hasEntries) {
   wrap.addEventListener('click', (e) => e.stopPropagation());
 
   const field = createMentionField({
-    placeholder: hasEntries ? 'Add another note…' : 'Add a note… tag @context for something you want handled.',
+    placeholder: hasEntries ? 'Add another note…' : 'Add a note… tag @context, or @todo for a menu of functions.',
     rows: 1,
     recurPicker: true,
+    todoMenu: true,
   });
 
   const closeBtn = document.createElement('button');

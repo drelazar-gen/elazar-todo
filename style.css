@@ -985,3 +985,78 @@ mark.mention {
 .functions-badge-instant { background: var(--accent-bg); color: var(--accent-dark); }
 .functions-badge-hourly { background: #fff3d6; color: #92650a; }
 .functions-item p { margin: 8px 0 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+/* @todo command menu — pops open under the field the moment "@todo" is
+   typed, similar to a "/" command palette. Positioned relative to
+   .mention-field (which is position:relative already). */
+.todo-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  z-index: 30;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.todo-menu-list { display: flex; flex-direction: column; gap: 2px; }
+.todo-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.todo-menu-item:hover, .todo-menu-item-highlighted { background: var(--accent-bg); }
+.todo-menu-item-label { font-size: 13.5px; font-weight: 700; color: var(--text); }
+.todo-menu-item-hint { font-size: 11.5px; color: var(--text-dim); }
+.todo-menu-add-new .todo-menu-item-label { color: var(--accent-dark); }
+
+.todo-menu-step { display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.todo-menu-step-label { font-size: 13px; font-weight: 700; color: var(--text); padding: 0 4px; }
+.todo-menu-search, .todo-menu-field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+  font-family: inherit;
+  background: #fbfbfa;
+}
+.todo-menu-search:focus, .todo-menu-field:focus { outline: none; border-color: var(--accent); background: white; }
+.todo-menu-error { font-size: 12px; color: var(--urgent); padding: 0 4px; }
+.todo-menu-actions { display: flex; justify-content: space-between; gap: 8px; padding: 0 4px; }
+.todo-menu-back { align-self: flex-start; }
+.todo-menu-loading { font-size: 12.5px; color: var(--text-faint); padding: 10px; text-align: center; }
+
+.todo-nudge-mode-row { display: flex; gap: 6px; padding: 0 4px; }
+.todo-nudge-mode-btn {
+  appearance: none;
+  background: #fbfbfa;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.todo-nudge-mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: white; }
+
+/* Shared with the recurring-interval picker's buttons — highlights whichever
+   interval is currently chosen in the nudge step. */
+.recur-picker button.recur-selected { background: var(--accent-dark); color: white; }
