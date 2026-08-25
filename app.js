@@ -23,7 +23,8 @@ const BACKGROUND_REFRESH_MS = 45000;
 let state = {
   items: [],
   showCompleted: true,
-  filterUrgent: false,
+  // 'all' | 'urgent' | 'delegated' | 'archived'
+  view: 'all',
   status: {},
   // recordIds of cards whose inline note-entry box is currently open, and
   // whose note log is currently expanded past the default 3-entry preview —
@@ -229,7 +230,7 @@ function refreshStatusPills() {
 // not yet checked off; once checked it drops off here too, same as the
 // flag disappearing from the card).
 function urgentItems() {
-  return state.items.filter((it) => it.urgent && !it.checked);
+  return state.items.filter((it) => it.urgent && !it.checked && !it.archived);
 }
 
 function updateUrgentBadge() {
@@ -240,14 +241,49 @@ function updateUrgentBadge() {
   badge.classList.toggle('hidden', count === 0);
 }
 
+// Items with anyone in "Delegated To" — used by both the badge count and
+// the Delegated tab itself.
+function delegatedItems() {
+  return state.items.filter((it) => it.delegatedToIds && it.delegatedToIds.length > 0);
+}
+
+function updateDelegatedBadge() {
+  const badge = $('#delegated-count-badge');
+  if (!badge) return;
+  const count = delegatedItems().filter((it) => !it.checked).length;
+  badge.textContent = String(count);
+  badge.classList.toggle('hidden', count === 0);
+}
+
+function populateSectionDatalist() {
+  const datalist = $('#section-list');
+  const allSections = Array.from(new Set([...PREFERRED_SECTION_ORDER, ...state.items.map((it) => it.section)]));
+  datalist.innerHTML = allSections.map((s) => `<option value="${escapeHtml(s)}"></option>`).join('');
+}
+
 function render() {
   const container = $('#sections-container');
   container.innerHTML = '';
 
   updateUrgentBadge();
+  updateDelegatedBadge();
+  populateSectionDatalist();
+
+  if (state.view === 'delegated') {
+    renderDelegatedView(container);
+    return;
+  }
+
+  // "All" and "Urgent" never show archived items (that's the whole point of
+  // archiving something — it gets out of the way); the Archived tab shows
+  // ONLY archived items, regardless of the "Show completed" toggle, since
+  // an archived item is by definition something Elazar is done with.
+  const baseItems = state.view === 'archived'
+    ? state.items.filter((it) => it.archived)
+    : state.items.filter((it) => !it.archived);
 
   const bySection = {};
-  state.items.forEach((item) => {
+  baseItems.forEach((item) => {
     if (!bySection[item.section]) bySection[item.section] = [];
     bySection[item.section].push(item);
   });
@@ -262,10 +298,12 @@ function render() {
 
   sectionNames.forEach((section) => {
     let items = bySection[section].slice().sort((a, b) => a.order - b.order);
-    if (state.filterUrgent) {
+    if (state.view === 'urgent') {
       items = items.filter((it) => it.urgent);
     }
-    if (!state.showCompleted) {
+    if (state.view === 'archived') {
+      items.sort((a, b) => a.order - b.order);
+    } else if (!state.showCompleted) {
       items = items.filter((it) => !it.checked);
     } else {
       items.sort((a, b) => (a.checked === b.checked ? a.order - b.order : a.checked ? 1 : -1));
@@ -281,20 +319,140 @@ function render() {
     title.textContent = section;
     block.appendChild(title);
 
-    items.forEach((item) => block.appendChild(renderItem(item)));
+    items.forEach((item) => block.appendChild(renderItem(item, { archivedView: state.view === 'archived' })));
     container.appendChild(block);
   });
 
   if (!renderedAny) {
-    container.innerHTML = state.filterUrgent
-      ? '<div class="empty-state">No urgent items right now. 🎉</div>'
-      : '<div class="empty-state">Nothing on the list right now.</div>';
+    const emptyMessages = {
+      urgent: 'No urgent items right now. 🎉',
+      archived: 'Nothing archived yet. Tag a note with <strong>@todo archive when done</strong> and it\'ll land here once you check it off.',
+      all: 'Nothing on the list right now.',
+    };
+    container.innerHTML = `<div class="empty-state">${emptyMessages[state.view] || emptyMessages.all}</div>`;
+  }
+}
+
+// Delegated tab — grouped by who it's delegated to (rather than by
+// section), so Elazar can see at a glance who has what and whether they've
+// checked it off, with a manual "Nudge" resend right there.
+function renderDelegatedView(container) {
+  const items = delegatedItems();
+  if (!items.length) {
+    container.innerHTML = '<div class="empty-state">Nothing delegated yet. Tag a note with <strong>@todo delegate to [Name]</strong> to send someone their own checklist.</div>';
+    return;
   }
 
-  // Populate section datalist for the modal
-  const datalist = $('#section-list');
-  const allSections = Array.from(new Set([...PREFERRED_SECTION_ORDER, ...Object.keys(bySection)]));
-  datalist.innerHTML = allSections.map((s) => `<option value="${escapeHtml(s)}"></option>`).join('');
+  const byContact = {};
+  items.forEach((item) => {
+    const name = item.delegatedToName || 'Unknown contact';
+    if (!byContact[name]) byContact[name] = [];
+    byContact[name].push(item);
+  });
+
+  Object.keys(byContact).sort((a, b) => a.localeCompare(b)).forEach((name) => {
+    const group = byContact[name].slice().sort((a, b) => (a.checked === b.checked ? a.order - b.order : a.checked ? 1 : -1));
+    const openCount = group.filter((it) => !it.checked).length;
+
+    const block = document.createElement('div');
+    block.className = 'contact-group';
+
+    const title = document.createElement('div');
+    title.className = 'contact-group-title';
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = name;
+    title.appendChild(nameSpan);
+    const countSpan = document.createElement('span');
+    countSpan.className = 'contact-group-count';
+    countSpan.textContent = openCount > 0 ? `${openCount} still open` : 'all done ✓';
+    title.appendChild(countSpan);
+    block.appendChild(title);
+
+    group.forEach((item) => block.appendChild(renderItem(item, { delegatedView: true })));
+    container.appendChild(block);
+  });
+}
+
+function renderArchiveStatusRow(item) {
+  const wrap = document.createElement('div');
+  wrap.className = 'archive-status-row';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'unarchive-btn';
+  btn.textContent = '↩ Unarchive — move back to your list';
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    btn.disabled = true;
+    btn.textContent = 'Unarchiving…';
+    try {
+      const result = await api('/api/items', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'update', recordId: item.recordId, archived: false }),
+      });
+      const idx = state.items.findIndex((it) => it.recordId === item.recordId);
+      if (idx !== -1) state.items[idx] = result.item;
+      render();
+    } catch (err) {
+      alert('Could not unarchive: ' + err.message);
+      btn.disabled = false;
+      btn.textContent = '↩ Unarchive — move back to your list';
+    }
+  });
+  wrap.appendChild(btn);
+  return wrap;
+}
+
+function renderDelegateStatusRow(item) {
+  const wrap = document.createElement('div');
+  wrap.className = 'delegate-status-row';
+
+  const status = document.createElement('span');
+  if (item.checked) {
+    status.className = 'delegate-status delegate-status-done';
+    status.textContent = '✓ Done';
+  } else if (item.delegateInviteSent) {
+    status.className = 'delegate-status delegate-status-pending';
+    status.textContent = 'Sent — awaiting them';
+  } else {
+    status.className = 'delegate-status delegate-status-unsent';
+    status.textContent = 'Not sent yet';
+  }
+  wrap.appendChild(status);
+
+  if (item.delegatedAt) {
+    const at = document.createElement('span');
+    at.className = 'note-entry-time';
+    const d = new Date(item.delegatedAt + 'T00:00:00');
+    at.textContent = 'Delegated ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    wrap.appendChild(at);
+  }
+
+  if (!item.checked) {
+    const nudgeBtn = document.createElement('button');
+    nudgeBtn.type = 'button';
+    nudgeBtn.className = 'delegate-nudge-btn';
+    nudgeBtn.textContent = 'Nudge';
+    nudgeBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      nudgeBtn.disabled = true;
+      nudgeBtn.textContent = 'Sending…';
+      try {
+        await api('/api/items', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'nudge', recordId: item.recordId }),
+        });
+        nudgeBtn.textContent = 'Sent ✓';
+      } catch (err) {
+        alert('Could not send nudge: ' + err.message);
+        nudgeBtn.disabled = false;
+        nudgeBtn.textContent = 'Nudge';
+      }
+    });
+    wrap.appendChild(nudgeBtn);
+  }
+
+  return wrap;
 }
 
 function escapeHtml(str) {
@@ -386,7 +544,13 @@ function formatMetaPreview(meta) {
 // native typing/caret/undo behavior, stacked over a backdrop <div> that
 // mirrors the same text with @tags highlighted. Returns a small controller
 // object so callers don't need to know about the DOM internals.
-function createMentionField({ placeholder, rows } = {}) {
+// recurPicker: true wires up a live "how often?" picker that pops open the
+// moment "@todo make recurring" is typed (before its closing parenthetical)
+// — Daily / Weekly / Monthly / Custom — and appends the matching
+// "(every day/week/month/N days)" suffix that the server's parseNoteTags()
+// regex expects, so the whole thing round-trips without Elazar needing to
+// know the exact syntax.
+function createMentionField({ placeholder, rows, recurPicker } = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'mention-field';
 
@@ -398,12 +562,76 @@ function createMentionField({ placeholder, rows } = {}) {
   textarea.rows = rows || 2;
   if (placeholder) textarea.placeholder = placeholder;
 
+  let picker = null;
+  if (recurPicker) {
+    picker = document.createElement('div');
+    picker.className = 'recur-picker hidden';
+    picker.innerHTML =
+      '<span class="recur-picker-label">Repeat:</span>' +
+      '<button type="button" data-interval="day">Daily</button>' +
+      '<button type="button" data-interval="week">Weekly</button>' +
+      '<button type="button" data-interval="month">Monthly</button>' +
+      '<button type="button" data-interval="custom">Custom</button>' +
+      '<span class="recur-custom-row hidden">' +
+        '<input type="number" min="1" class="recur-custom-input" placeholder="days" />' +
+        '<button type="button" class="recur-custom-confirm">Set</button>' +
+      '</span>';
+  }
+
+  function applyRecurSuffix(suffix) {
+    const val = textarea.value.replace(/\s+$/, '');
+    textarea.value = `${val} (every ${suffix})`;
+    sync();
+    textarea.focus();
+    const end = textarea.value.length;
+    textarea.setSelectionRange(end, end);
+  }
+
+  function updateRecurPicker() {
+    if (!picker) return;
+    const val = textarea.value;
+    const showPicker = /@todo\s+make\s*(?:this)?\s*recurring\b/i.test(val) && !/\(every\s+/i.test(val);
+    picker.classList.toggle('hidden', !showPicker);
+    if (!showPicker) picker.querySelector('.recur-custom-row').classList.add('hidden');
+  }
+
+  if (picker) {
+    picker.querySelectorAll('button[data-interval]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const kind = btn.getAttribute('data-interval');
+        if (kind === 'custom') {
+          picker.querySelector('.recur-custom-row').classList.remove('hidden');
+          picker.querySelector('.recur-custom-input').focus();
+          return;
+        }
+        applyRecurSuffix(kind);
+        picker.classList.add('hidden');
+      });
+    });
+    const customInput = picker.querySelector('.recur-custom-input');
+    const customConfirm = picker.querySelector('.recur-custom-confirm');
+    const confirmCustom = () => {
+      const n = parseInt(customInput.value, 10);
+      if (!n || n < 1) { customInput.focus(); return; }
+      applyRecurSuffix(`${n} day${n === 1 ? '' : 's'}`);
+      picker.classList.add('hidden');
+      customInput.value = '';
+    };
+    customConfirm.addEventListener('click', (e) => { e.preventDefault(); confirmCustom(); });
+    customInput.addEventListener('click', (e) => e.stopPropagation());
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); confirmCustom(); }
+    });
+  }
+
   function sync() {
     const val = textarea.value;
     // Trailing newline(s) collapse in a plain div — pad so the backdrop's
     // height/scroll stays matched to the textarea.
     backdrop.innerHTML = highlightMentionsHtml(val) + (/\n$/.test(val) ? '&nbsp;' : '');
     backdrop.scrollTop = textarea.scrollTop;
+    updateRecurPicker();
   }
 
   textarea.addEventListener('input', sync);
@@ -411,6 +639,7 @@ function createMentionField({ placeholder, rows } = {}) {
 
   wrap.appendChild(backdrop);
   wrap.appendChild(textarea);
+  if (picker) wrap.appendChild(picker);
   sync();
 
   return {
@@ -425,10 +654,12 @@ function createMentionField({ placeholder, rows } = {}) {
 const metaField = createMentionField({
   placeholder: 'Extra context, amounts, dates... Tag @context for something you want handled.',
   rows: 3,
+  recurPicker: true,
 });
 $('#field-meta-mount').appendChild(metaField.el);
 
-function renderItem(item) {
+function renderItem(item, opts) {
+  opts = opts || {};
   const row = document.createElement('div');
   row.className = 'item-row' + (item.checked ? ' checked' : '') + (item.urgent && !item.checked ? ' urgent' : '');
 
@@ -482,6 +713,9 @@ function renderItem(item) {
   noteWrap.className = 'item-note-wrap';
   renderNoteWrap(item, noteWrap);
   body.appendChild(noteWrap);
+
+  if (opts.archivedView) body.appendChild(renderArchiveStatusRow(item));
+  if (opts.delegatedView) body.appendChild(renderDelegateStatusRow(item));
 
   row.appendChild(checkbox);
   row.appendChild(body);
@@ -573,6 +807,7 @@ function renderNoteInput(item, container, hasEntries) {
   const field = createMentionField({
     placeholder: hasEntries ? 'Add another note…' : 'Add a note… tag @context for something you want handled.',
     rows: 1,
+    recurPicker: true,
   });
 
   const closeBtn = document.createElement('button');
@@ -607,7 +842,10 @@ function renderNoteInput(item, container, hasEntries) {
         const newMeta = appendMetaEntry(item.meta, val);
         const result = await api('/api/items', {
           method: 'POST',
-          body: JSON.stringify({ action: 'update', recordId: item.recordId, meta: newMeta }),
+          // newNoteText (the raw just-typed entry, separate from the full
+          // meta log) lets the server detect @todo make-recurring/archive/
+          // delegate tags instantly, without waiting for the hourly check-in.
+          body: JSON.stringify({ action: 'update', recordId: item.recordId, meta: newMeta, newNoteText: val }),
         });
         const idx = state.items.findIndex((it) => it.recordId === item.recordId);
         if (idx !== -1) state.items[idx] = result.item;
@@ -625,15 +863,23 @@ function renderNoteInput(item, container, hasEntries) {
 }
 
 async function toggleItem(item, checked) {
+  const prevChecked = item.checked;
   item.checked = checked; // optimistic
   render();
   try {
-    await api('/api/items', {
+    // Capture the real returned record rather than just trusting `checked`
+    // — e.g. an "@todo archive when done" item also gets Archived set
+    // server-side the moment it's checked off, and this is what makes that
+    // show up immediately instead of waiting for the next background poll.
+    const result = await api('/api/items', {
       method: 'POST',
       body: JSON.stringify({ action: 'toggle', recordId: item.recordId, checked }),
     });
+    const idx = state.items.findIndex((it) => it.recordId === item.recordId);
+    if (idx !== -1) state.items[idx] = result.item;
+    render();
   } catch (e) {
-    item.checked = !checked; // revert
+    item.checked = prevChecked; // revert
     render();
     alert('Could not update: ' + e.message);
   }
@@ -1048,17 +1294,27 @@ $('#show-completed-toggle').addEventListener('click', () => {
   render();
 });
 
-function setActiveTab(urgentOnly) {
-  state.filterUrgent = urgentOnly;
-  $('#tab-all').classList.toggle('active', !urgentOnly);
-  $('#tab-all').setAttribute('aria-selected', String(!urgentOnly));
-  $('#tab-urgent').classList.toggle('active', urgentOnly);
-  $('#tab-urgent').setAttribute('aria-selected', String(urgentOnly));
+function setActiveTab(view) {
+  state.view = view;
+  ['all', 'urgent', 'delegated', 'archived'].forEach((v) => {
+    const tab = $(`#tab-${v}`);
+    if (!tab) return;
+    tab.classList.toggle('active', v === view);
+    tab.setAttribute('aria-selected', String(v === view));
+  });
   render();
 }
 
-$('#tab-all').addEventListener('click', () => setActiveTab(false));
-$('#tab-urgent').addEventListener('click', () => setActiveTab(true));
+$('#tab-all').addEventListener('click', () => setActiveTab('all'));
+$('#tab-urgent').addEventListener('click', () => setActiveTab('urgent'));
+$('#tab-delegated').addEventListener('click', () => setActiveTab('delegated'));
+$('#tab-archived').addEventListener('click', () => setActiveTab('archived'));
+
+$('#functions-btn').addEventListener('click', () => $('#functions-overlay').classList.remove('hidden'));
+$('#functions-close').addEventListener('click', () => $('#functions-overlay').classList.add('hidden'));
+$('#functions-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#functions-overlay')) $('#functions-overlay').classList.add('hidden');
+});
 
 const updateQuickAddEventHint = watchForEventPrefix(
   $('#quick-add-input'),

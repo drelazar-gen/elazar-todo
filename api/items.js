@@ -1,5 +1,5 @@
 const { isAuthenticated } = require('../lib/auth');
-const { listItems, createItem, updateItem, deleteItem, getStatus } = require('../lib/airtable');
+const { listItems, createItem, updateItem, deleteItem, getStatus, nudgeDelegatedItem } = require('../lib/airtable');
 
 module.exports = async (req, res) => {
   if (!isAuthenticated(req)) {
@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
       }
 
       if (action === 'toggle') {
-        const item = await updateItem(body.recordId, { checked: body.checked });
+        const item = await updateItem(body.recordId, { checked: body.checked, archived: body.archived });
         res.status(200).json({ ok: true, item });
         return;
       }
@@ -47,6 +47,12 @@ module.exports = async (req, res) => {
       if (action === 'delete') {
         await deleteItem(body.recordId);
         res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (action === 'nudge') {
+        const result = await nudgeDelegatedItem(body.recordId);
+        res.status(200).json({ ok: true, result });
         return;
       }
 
