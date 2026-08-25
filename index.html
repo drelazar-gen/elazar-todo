@@ -45,6 +45,14 @@
         </div>
       </div>
 
+      <div class="view-tabs" role="tablist">
+        <button id="tab-all" class="view-tab active" type="button" role="tab" aria-selected="true">All items</button>
+        <button id="tab-urgent" class="view-tab view-tab-urgent" type="button" role="tab" aria-selected="false">
+          Urgent
+          <span id="urgent-count-badge" class="urgent-count-badge hidden">0</span>
+        </button>
+      </div>
+
       <div class="status-pills">
         <div id="sync-pill" class="pill pill-lg pill-green">Live sync connected — changes save instantly</div>
         <div class="pill-row">

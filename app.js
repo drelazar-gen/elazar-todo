@@ -23,6 +23,7 @@ const BACKGROUND_REFRESH_MS = 45000;
 let state = {
   items: [],
   showCompleted: true,
+  filterUrgent: false,
   status: {},
   // recordIds of cards whose inline note-entry box is currently open, and
   // whose note log is currently expanded past the default 3-entry preview —
@@ -223,9 +224,27 @@ function refreshStatusPills() {
 
 /* ---------------- Rendering ---------------- */
 
+// Items considered "urgent" for the Urgent tab/badge — matches the same
+// condition that shows the red URGENT flag on a card (marked urgent and
+// not yet checked off; once checked it drops off here too, same as the
+// flag disappearing from the card).
+function urgentItems() {
+  return state.items.filter((it) => it.urgent && !it.checked);
+}
+
+function updateUrgentBadge() {
+  const badge = $('#urgent-count-badge');
+  if (!badge) return;
+  const count = urgentItems().length;
+  badge.textContent = String(count);
+  badge.classList.toggle('hidden', count === 0);
+}
+
 function render() {
   const container = $('#sections-container');
   container.innerHTML = '';
+
+  updateUrgentBadge();
 
   const bySection = {};
   state.items.forEach((item) => {
@@ -239,18 +258,20 @@ function render() {
     return a.localeCompare(b);
   });
 
-  if (sectionNames.length === 0) {
-    container.innerHTML = '<div class="empty-state">Nothing on the list right now.</div>';
-  }
+  let renderedAny = false;
 
   sectionNames.forEach((section) => {
     let items = bySection[section].slice().sort((a, b) => a.order - b.order);
+    if (state.filterUrgent) {
+      items = items.filter((it) => it.urgent);
+    }
     if (!state.showCompleted) {
       items = items.filter((it) => !it.checked);
     } else {
       items.sort((a, b) => (a.checked === b.checked ? a.order - b.order : a.checked ? 1 : -1));
     }
     if (items.length === 0) return;
+    renderedAny = true;
 
     const block = document.createElement('div');
     block.className = 'section-block';
@@ -263,6 +284,12 @@ function render() {
     items.forEach((item) => block.appendChild(renderItem(item)));
     container.appendChild(block);
   });
+
+  if (!renderedAny) {
+    container.innerHTML = state.filterUrgent
+      ? '<div class="empty-state">No urgent items right now. 🎉</div>'
+      : '<div class="empty-state">Nothing on the list right now.</div>';
+  }
 
   // Populate section datalist for the modal
   const datalist = $('#section-list');
@@ -1020,6 +1047,18 @@ $('#show-completed-toggle').addEventListener('click', () => {
   $('#show-completed-toggle').textContent = state.showCompleted ? 'Hide completed' : 'Show completed';
   render();
 });
+
+function setActiveTab(urgentOnly) {
+  state.filterUrgent = urgentOnly;
+  $('#tab-all').classList.toggle('active', !urgentOnly);
+  $('#tab-all').setAttribute('aria-selected', String(!urgentOnly));
+  $('#tab-urgent').classList.toggle('active', urgentOnly);
+  $('#tab-urgent').setAttribute('aria-selected', String(urgentOnly));
+  render();
+}
+
+$('#tab-all').addEventListener('click', () => setActiveTab(false));
+$('#tab-urgent').addEventListener('click', () => setActiveTab(true));
 
 const updateQuickAddEventHint = watchForEventPrefix(
   $('#quick-add-input'),
