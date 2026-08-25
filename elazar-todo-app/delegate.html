@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Your To-Do Items</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%231f7a56'/%3E%3Cpath d='M7.5 12.2l3 3 6-6.4' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #faf9f6;
+    --card: #ffffff;
+    --border-soft: #efeee9;
+    --text: #17181a;
+    --text-dim: #6f7075;
+    --text-faint: #9b9b9b;
+    --accent: #1f7a56;
+    --accent-dark: #17563e;
+    --accent-bg: #e7f4ee;
+    --urgent: #c0392b;
+    --urgent-bg: #fdeeec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 28px 18px 60px; }
+  .header { margin-bottom: 22px; }
+  .header h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 4px; }
+  .header p { margin: 0; color: var(--text-dim); font-size: 14px; }
+  .state-msg { text-align: center; color: var(--text-dim); padding: 60px 20px; font-size: 14.5px; }
+  .item-card {
+    background: var(--card);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    transition: opacity 0.15s ease;
+  }
+  .item-card.urgent { border-color: #eec9c3; background: linear-gradient(180deg, var(--urgent-bg) 0%, #fff 130%); }
+  .item-card.checked { opacity: 0.55; }
+  .item-checkbox {
+    width: 21px;
+    height: 21px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .item-body { flex: 1; min-width: 0; }
+  .item-section { font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); margin-bottom: 3px; }
+  .item-text { font-size: 15.5px; font-weight: 600; line-height: 1.4; }
+  .item-card.checked .item-text { text-decoration: line-through; }
+  .item-meta { font-size: 13px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; white-space: pre-wrap; }
+  .item-link { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--accent-dark); font-weight: 700; text-decoration: none; }
+  .urgent-flag { display: inline-block; font-size: 10px; font-weight: 800; color: var(--urgent); margin-right: 6px; letter-spacing: 0.05em; vertical-align: middle; }
+  .footer-note { text-align: center; color: var(--text-faint); font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1 id="greeting">Your To-Do Items</h1>
+      <p id="subhead">Loading…</p>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('t');
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+
+    // Meta is stored as an append-only log of timestamped entries (see the
+    // main app's NOTE_LINE_PREFIX format) or, for older items, plain text.
+    // This portal is read-mostly for context, so just show the latest
+    // entry's text rather than parsing the whole log.
+    function latestMetaText(meta) {
+      if (!meta) return '';
+      const NOTE_LINE_PREFIX = '⁣NOTE⁣';
+      const lines = String(meta).split('\n');
+      const last = lines[lines.length - 1];
+      if (last.startsWith(NOTE_LINE_PREFIX)) {
+        try {
+          return JSON.parse(last.slice(NOTE_LINE_PREFIX.length)).x || '';
+        } catch (e) {
+          return '';
+        }
+      }
+      return meta;
+    }
+
+    async function api(path, opts) {
+      const res = await fetch(path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', ...(opts && opts.headers) },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error((data && data.error) || 'Request failed');
+      return data;
+    }
+
+    function renderItems(items) {
+      const list = $('#list');
+      list.innerHTML = '';
+      if (!items.length) {
+        list.innerHTML = '<div class="state-msg">Nothing assigned to you right now. 🎉</div>';
+        return;
+      }
+      items
+        .slice()
+        .sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1))
+        .forEach((item) => {
+          const card = document.createElement('div');
+          card.className = 'item-card' + (item.checked ? ' checked' : '') + (item.urgent && !item.checked ? ' urgent' : '');
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'item-checkbox';
+          checkbox.checked = item.checked;
+          checkbox.addEventListener('change', async () => {
+            checkbox.disabled = true;
+            try {
+              await api('/api/delegate', {
+                method: 'POST',
+                body: JSON.stringify({ t: token, action: 'toggle', recordId: item.recordId, checked: checkbox.checked }),
+              });
+              card.classList.toggle('checked', checkbox.checked);
+              card.querySelector('.item-text').style.textDecoration = checkbox.checked ? 'line-through' : 'none';
+            } catch (err) {
+              alert('Could not save: ' + err.message);
+              checkbox.checked = !checkbox.checked;
+            }
+            checkbox.disabled = false;
+          });
+
+          const body = document.createElement('div');
+          body.className = 'item-body';
+
+          const section = document.createElement('div');
+          section.className = 'item-section';
+          section.textContent = item.section || '';
+          body.appendChild(section);
+
+          const text = document.createElement('div');
+          text.className = 'item-text';
+          if (item.urgent && !item.checked) {
+            const flag = document.createElement('span');
+            flag.className = 'urgent-flag';
+            flag.textContent = 'URGENT';
+            text.appendChild(flag);
+          }
+          text.appendChild(document.createTextNode(item.text));
+          body.appendChild(text);
+
+          const metaText = latestMetaText(item.meta);
+          if (metaText) {
+            const meta = document.createElement('div');
+            meta.className = 'item-meta';
+            meta.textContent = metaText;
+            body.appendChild(meta);
+          }
+
+          if (item.link) {
+            const link = document.createElement('a');
+            link.className = 'item-link';
+            link.href = item.link;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Take me there →';
+            body.appendChild(link);
+          }
+
+          card.appendChild(checkbox);
+          card.appendChild(body);
+          list.appendChild(card);
+        });
+    }
+
+    async function init() {
+      if (!token) {
+        $('#subhead').textContent = 'This link is missing its access token.';
+        return;
+      }
+      try {
+        const data = await api('/api/delegate?t=' + encodeURIComponent(token), { method: 'GET' });
+        $('#greeting').textContent = data.contact.name ? `Hi ${escapeHtml(data.contact.name)} 👋` : 'Your To-Do Items';
+        $('#subhead').textContent = 'Assigned to you by Elazar — check items off as you finish them.';
+        renderItems(data.items || []);
+      } catch (err) {
+        $('#subhead').textContent = '';
+        $('#list').innerHTML = `<div class="state-msg">${escapeHtml(err.message || 'This link isn’t working right now.')}</div>`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

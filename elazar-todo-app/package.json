@@ -1,0 +1,8 @@
+{
+  "name": "elazar-todo-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Password-protected mobile-friendly to-do list backed by Airtable.",
+  "scripts": {},
+  "dependencies": {}
+}

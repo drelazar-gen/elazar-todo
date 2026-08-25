@@ -1,0 +1,987 @@
+:root {
+  --bg: #f3f2ee;
+  --bg-accent: #eae8e1;
+  --card: #ffffff;
+  --text: #1a1b1e;
+  --text-dim: #6f7075;
+  --text-faint: #9a9ba1;
+  --border: #e8e7e2;
+  --border-soft: #efeee9;
+  --accent: #1f7a56;
+  --accent-dark: #17563e;
+  --accent-bg: #e7f4ee;
+  --urgent: #c0392b;
+  --urgent-bg: #fdeeec;
+  --event: #6d4aa8;
+  --event-bg: #f1ecf9;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 20, 0.04), 0 1px 1px rgba(20, 20, 20, 0.03);
+  --shadow-md: 0 8px 24px rgba(20, 20, 20, 0.07), 0 2px 6px rgba(20, 20, 20, 0.04);
+  --shadow-lg: 0 20px 48px rgba(20, 20, 20, 0.14), 0 6px 16px rgba(20, 20, 20, 0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 480px at 15% -10%, #f7f9f6 0%, transparent 60%),
+    radial-gradient(900px 420px at 100% 0%, #f2f6f2 0%, transparent 55%),
+    var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+.hidden { display: none !important; }
+
+/* Login */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.login-card {
+  background: var(--card);
+  border-radius: 22px;
+  padding: 40px 30px 32px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-soft);
+  text-align: center;
+}
+.login-mark {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
+  border-radius: 14px;
+  background: linear-gradient(155deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 22px;
+  box-shadow: 0 10px 22px rgba(31, 122, 86, 0.28);
+}
+.login-card h1 { font-size: 20px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.01em; }
+.login-sub { color: var(--text-dim); margin: 0 0 22px; font-size: 14px; }
+.login-card form { display: flex; flex-direction: column; gap: 12px; }
+.login-card input {
+  padding: 13px 15px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 16px;
+  font-family: inherit;
+  background: #fbfbfa;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.login-card input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+  background: white;
+}
+.login-card button {
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(155deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(31, 122, 86, 0.25);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.login-card button:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(31, 122, 86, 0.32); }
+.login-error { color: var(--urgent); font-size: 13px; min-height: 18px; margin-top: 12px; }
+
+/* App shell */
+.app { max-width: 720px; margin: 0 auto; padding: 18px 16px 100px; }
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 10px 4px 16px;
+  background: rgba(243, 242, 238, 0.86);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.app-header h1 {
+  font-size: 23px;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.updated-label { font-size: 12.5px; color: var(--text-dim); margin-top: 3px; }
+.header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+.ghost-btn {
+  background: rgba(255,255,255,0.7);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.ghost-btn:hover { background: white; border-color: #dcdbd5; }
+.primary-btn {
+  background: linear-gradient(155deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(31, 122, 86, 0.24);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+.primary-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 122, 86, 0.3); }
+.primary-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+.danger-btn {
+  background: transparent;
+  color: var(--urgent);
+  border: 1px solid #f0c6c0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.danger-btn:hover { background: var(--urgent-bg); }
+.small-btn { padding: 7px 13px; font-size: 12.5px; border-radius: 8px; box-shadow: none; }
+.icon-btn { font-size: 15px; padding: 7px 11px; line-height: 1; }
+
+/* Calendar toggle: a mini calendar-icon widget showing today's actual
+   live date (month + day, refreshed in app.js) instead of a generic
+   emoji — sized up so it reads clearly as its own button and doubles as
+   an at-a-glance "what day is it" indicator. */
+.calendar-date-btn {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+.calendar-date-btn:hover { border-color: #dcdbd5; }
+.calendar-date-btn .cal-hangers {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+}
+.calendar-date-btn .cal-hangers span {
+  width: 5px;
+  height: 8px;
+  border-radius: 2px;
+  background: #aeb2ba;
+}
+.calendar-date-btn .cal-header {
+  background: #d93025;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+  padding: 6px 0 4px;
+  text-align: center;
+}
+.calendar-date-btn .cal-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text);
+}
+/* Calendar toggle is the primary secondary-action here — sized up so it
+   reads clearly as its own button rather than blending into the row. */
+
+/* Status pills */
+.view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.view-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 4px 9px;
+  margin-bottom: -1px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.view-tab:hover { color: var(--text); }
+.view-tab.active { color: var(--accent-dark); border-bottom-color: var(--accent); }
+.view-tab-urgent.active { color: var(--urgent); border-bottom-color: var(--urgent); }
+.urgent-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--urgent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.urgent-count-badge.hidden { display: none; }
+
+.status-pills { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-weight: 600;
+  line-height: 1.3;
+  border: 1px solid transparent;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.pill-lg {
+  /* Full width (not fit-content) so the text lays out across the whole
+     available line instead of wrapping inside a narrow pill — that
+     wrapping is what made the sticky header tall on phones. */
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: var(--shadow-sm);
+}
+.pill-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill-sm {
+  padding: 6px 12px;
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+.pill-green {
+  background: var(--accent-bg);
+  color: var(--accent-dark);
+  border-color: #cfe8dc;
+}
+.pill-green::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.pill-red {
+  background: var(--urgent-bg);
+  color: var(--urgent);
+  border-color: #f3d0cb;
+}
+.pill-red::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--urgent);
+  flex-shrink: 0;
+}
+
+/* Compact the sticky header on phones — previously the title row, action
+   buttons, and both status pills could each wrap onto their own extra
+   line on a narrow screen, pushing the sticky header down to ~8 lines
+   tall and eating a big chunk of the viewport before any to-do items
+   were visible. This tightens spacing/sizing and lets rows wrap once
+   cleanly instead of stacking excessively. */
+@media (max-width: 480px) {
+  .app-header { padding: 8px 4px 12px; }
+  .header-top { flex-wrap: wrap; row-gap: 6px; }
+  .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .view-tabs { margin-top: 10px; }
+  .view-tab { font-size: 12.5px; padding: 7px 3px 8px; }
+  .status-pills { margin-top: 10px; gap: 6px; }
+  .pill-lg { font-size: 12px; padding: 8px 14px; }
+  .pill-sm { font-size: 10.5px; padding: 5px 10px; }
+  .calendar-date-btn { width: 40px; height: 40px; border-radius: 10px; }
+  .calendar-date-btn .cal-header { font-size: 9px; padding: 5px 0 3px; }
+  .calendar-date-btn .cal-body { font-size: 16px; }
+}
+
+/* Quick add */
+.quick-add-card { margin: 18px 4px 22px; }
+.quick-add-row { display: flex; gap: 8px; }
+.quick-add-row input {
+  flex: 1;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.quick-add-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+/* Typing "EVENT:" (case-insensitive) at the start flags this item for the
+   automated check-in to push onto the calendar — see updateEventDetection()
+   in app.js. Purple is used nowhere else in the app so it reads as its own
+   distinct signal, separate from urgent (red) or carried-over (amber). */
+.quick-add-row input.event-detected,
+.quick-add-row input.event-detected:focus {
+  border-color: var(--event);
+  background: var(--event-bg);
+  box-shadow: 0 0 0 3px var(--event-bg);
+}
+.quick-add-row button { flex-shrink: 0; }
+.event-hint { font-size: 12px; color: var(--text-faint); margin: 9px 4px 0; line-height: 1.5; transition: color 0.15s ease; }
+.event-hint.event-active { color: var(--event); font-weight: 600; }
+.event-hint.event-active strong { color: var(--event); }
+
+.section-block { margin-bottom: 26px; }
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin: 0 0 10px 6px;
+}
+
+.item-row {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 9px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.item-row:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); border-color: #e0dfd9; }
+.item-row.urgent { border-color: #eec9c3; background: linear-gradient(180deg, var(--urgent-bg) 0%, #fff 120%); }
+.item-row.checked { opacity: 0.5; }
+.item-row.checked:hover { transform: none; box-shadow: var(--shadow-sm); }
+
+.item-checkbox {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.item-body { flex: 1; min-width: 0; }
+.item-text { font-size: 15px; font-weight: 600; line-height: 1.4; letter-spacing: -0.005em; }
+.item-row.checked .item-text { text-decoration: line-through; }
+.item-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--accent-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+.item-link:active { opacity: 0.7; }
+.urgent-flag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--urgent);
+  margin-right: 7px;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+.carried-over-flag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #b8791a;
+  margin-right: 7px;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+.reopened-flag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #3b5fd1;
+  margin-right: 7px;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
+/* Inline note / context — sits at the very bottom of the card, below the
+   link, separated by a thin ~50%-opacity rule so it visually reads as part
+   of the same card without being mistaken for another item. */
+.item-note-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 20, 20, 0.5);
+}
+
+/* The note log itself — a running list of timestamped entries, oldest on
+   top, newest at the bottom, exactly like a small activity feed. */
+.note-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.note-entry { font-size: 13px; line-height: 1.45; }
+.note-entry-time {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-faint);
+  margin-right: 7px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.note-entry-text { color: var(--text-dim); }
+
+/* "▼ See N earlier" / "▲ Hide" — only appears once a card has more than
+   3 entries; keeps the latest entries (including one just typed) always
+   visible without the card growing unbounded. */
+.note-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--accent-dark);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0 0 2px;
+}
+.note-toggle:hover { text-decoration: underline; }
+.note-toggle-arrow { font-size: 9px; line-height: 1; display: inline-block; }
+
+.note-edit-btn, .add-note-btn {
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.note-edit-btn {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.note-edit-btn:hover { color: var(--accent-dark); }
+.add-note-btn { color: var(--accent-dark); font-size: 12.5px; font-weight: 700; }
+.add-note-btn:hover { text-decoration: underline; }
+
+/* Single-line "add a note" box — opens on click, stays open after Enter
+   (the just-saved entry appears in the log above, and a fresh empty box
+   is ready for the next one) until explicitly closed. */
+.note-input-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.note-input-row .mention-field { flex: 1; }
+.note-input-row .mention-input { resize: none; }
+.note-input-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 8px 4px;
+  line-height: 1;
+}
+.note-input-close:hover { color: var(--urgent); }
+
+/* Mention-aware textarea: a plain textarea (invisible text, real caret)
+   stacked over a backdrop div that mirrors the same text with @tags
+   highlighted — keeps native textarea editing/undo/caret behavior while
+   still rendering rich highlights. */
+.mention-field {
+  position: relative;
+  width: 100%;
+}
+.mention-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+}
+.mention-field .mention-backdrop, .mention-field .mention-input {
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-family: inherit;
+  line-height: 1.45;
+}
+.mention-field .mention-backdrop {
+  background: #fbfbfa;
+  border-color: var(--border);
+}
+.mention-field .mention-input {
+  position: relative;
+  display: block;
+  width: 100%;
+  resize: vertical;
+  /* Transparent so the highlighted backdrop underneath shows through — a
+     positioned element painted later in the DOM (this textarea) stacks
+     above its absolutely-positioned sibling (the backdrop) regardless of
+     which one is visually "under" conceptually, so an opaque background
+     here would hide the highlights entirely. */
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  border-color: transparent;
+  outline: none;
+}
+.mention-field:focus-within .mention-backdrop { background: white; border-color: var(--accent); }
+/* Beats the modal's generic ".modal textarea:focus" background rule, which
+   would otherwise re-opaque this textarea and hide the backdrop again. */
+.mention-field .mention-input:focus { background: transparent; outline: none; }
+.mention-field .mention-input::placeholder { color: var(--text-faint); }
+mark.mention {
+  background: var(--accent-bg);
+  color: var(--accent-dark);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+.mention-hint { font-size: 11.5px; color: var(--text-faint); margin: 6px 2px 0; line-height: 1.4; }
+
+.empty-state {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 48px 16px;
+  font-size: 14px;
+}
+
+.add-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 26px;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
+  font-size: 28px;
+  font-weight: 400;
+  border: none;
+  box-shadow: 0 14px 30px rgba(23, 86, 62, 0.38);
+  cursor: pointer;
+  line-height: 1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.add-fab:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 18px 36px rgba(23, 86, 62, 0.44); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 18, 0.44);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 20;
+}
+.modal {
+  background: var(--card);
+  width: 100%;
+  max-width: 480px;
+  border-radius: 22px 22px 0 0;
+  padding: 22px 22px 30px;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+@media (min-width: 540px) {
+  .modal-overlay { align-items: center; }
+  .modal { border-radius: 20px; }
+}
+.modal h2 { margin: 0 0 18px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+.modal label { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-dim); margin: 16px 0 7px; text-transform: uppercase; letter-spacing: 0.05em; }
+.modal input[type=text], .modal input[type=url], .modal textarea, .modal input:not([type]) {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+  background: #fbfbfa;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.modal input:focus, .modal textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+  background: white;
+}
+/* Same "this becomes a calendar event" signal as the quick-add bar — see
+   .quick-add-row input.event-detected and updateEventDetection() in app.js. */
+#field-text.event-detected,
+#field-text.event-detected:focus {
+  border-color: var(--event);
+  background: var(--event-bg);
+  box-shadow: 0 0 0 3px var(--event-bg);
+}
+.field-event-hint { font-size: 12px; color: var(--text-faint); margin: 7px 2px 0; line-height: 1.4; transition: color 0.15s ease; }
+.field-event-hint.event-active { color: var(--event); font-weight: 600; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: none; font-weight: 500; color: var(--text); }
+.checkbox-row input { width: auto; }
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.modal-actions-right { display: flex; gap: 10px; }
+.modal-delete-wrap { display: flex; align-items: center; }
+.delete-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--urgent);
+}
+
+/* Calendar */
+.calendar-modal { max-width: 420px; }
+.calendar-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.calendar-modal-header h2 { margin: 0; font-size: 17px; }
+.cal-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 26px 0;
+}
+.cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+}
+.cal-cell-blank { visibility: hidden; }
+.cal-cell-has-data {
+  cursor: pointer;
+  background: #fbfbfa;
+  border-color: var(--border-soft);
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+}
+.cal-cell-has-data:hover { background: white; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.cal-cell-today { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.cal-cell-today .cal-cell-num { color: var(--accent-dark); }
+.cal-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.cal-dot-green { background: var(--accent); }
+.cal-dot-yellow { background: #d6a72c; }
+.cal-dot-red { background: var(--urgent); }
+.cal-legend {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin: 14px 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cal-day-panel h3 { margin: 4px 0 14px; font-size: 16px; font-weight: 800; }
+.cal-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.cal-item-row:last-child { border-bottom: none; }
+.cal-item-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--accent-dark);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.cal-item-row.checked .cal-item-check { background: var(--accent-bg); border-color: var(--accent); }
+.cal-item-body { flex: 1; min-width: 0; }
+.cal-item-text { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.cal-item-row.checked .cal-item-text { text-decoration: line-through; color: var(--text-dim); }
+.cal-item-meta { font-size: 12.5px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+
+.cal-item-row { flex-wrap: wrap; }
+.reopen-wrap { flex-basis: 100%; margin-left: 31px; margin-top: 6px; }
+.reopen-prompt {
+  width: 100%;
+  max-width: 280px;
+  box-sizing: border-box;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.reopen-prompt-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+.reopen-prompt-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+  background: var(--card);
+  color: var(--text);
+}
+.reopen-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Delegated / Archived tabs */
+.view-tab-delegated.active { color: #3b5fd1; border-bottom-color: #3b5fd1; }
+.view-tab-archived.active { color: var(--text-dim); border-bottom-color: var(--text-faint); }
+.delegated-count-badge { background: #3b5fd1; }
+
+.contact-group { margin-bottom: 26px; }
+.contact-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin: 0 0 10px 6px;
+}
+.contact-group-title .contact-group-count { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text-faint); }
+
+.delegate-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 20, 20, 0.5);
+}
+.delegate-status {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.delegate-status-done { background: var(--accent-bg); color: var(--accent-dark); }
+.delegate-status-pending { background: #fff3d6; color: #92650a; }
+.delegate-status-unsent { background: var(--urgent-bg); color: var(--urgent); }
+.delegate-nudge-btn {
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+.delegate-nudge-btn:hover { text-decoration: underline; }
+.delegate-nudge-btn:disabled { color: var(--text-faint); cursor: default; text-decoration: none; }
+
+.archive-status-row {
+  display: flex;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(20, 20, 20, 0.5);
+}
+.unarchive-btn {
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  color: var(--accent-dark);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.unarchive-btn:hover { text-decoration: underline; }
+
+/* Recurring-interval picker — appears live under a note field the moment
+   "@todo make recurring" is typed, before the closing parenthetical. */
+.recur-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding: 8px 9px;
+  background: var(--accent-bg);
+  border: 1px solid #cfe8dc;
+  border-radius: 8px;
+}
+.recur-picker-label { font-size: 12px; font-weight: 700; color: var(--accent-dark); margin-right: 2px; }
+.recur-picker button {
+  appearance: none;
+  background: white;
+  border: 1px solid #cfe8dc;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.recur-picker button:hover { background: var(--accent-dark); color: white; transform: translateY(-1px); }
+.recur-custom-row { display: inline-flex; align-items: center; gap: 5px; }
+.recur-custom-row.hidden { display: none; }
+.recur-custom-input {
+  width: 56px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  border: 1px solid #cfe8dc;
+  font-family: inherit;
+  font-size: 12.5px;
+  background: white;
+}
+.recur-custom-input:focus { outline: none; border-color: var(--accent); }
+
+/* Functions guide modal */
+.functions-modal { max-width: 520px; }
+.functions-intro { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 18px; }
+.functions-list { display: flex; flex-direction: column; gap: 14px; }
+.functions-item {
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fbfbfa;
+}
+.functions-item-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.functions-tag {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: var(--accent-bg);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+.functions-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.functions-badge-instant { background: var(--accent-bg); color: var(--accent-dark); }
+.functions-badge-hourly { background: #fff3d6; color: #92650a; }
+.functions-item p { margin: 8px 0 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }

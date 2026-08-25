@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Elazar — To-Do List</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='6.3' y='0.8' width='2' height='3.6' rx='1' fill='%238a8f98'/%3E%3Crect x='15.7' y='0.8' width='2' height='3.6' rx='1' fill='%238a8f98'/%3E%3Crect x='1.5' y='2.5' width='21' height='20' rx='4' fill='%23ffffff' stroke='%23d8d8d8' stroke-width='0.6'/%3E%3Cpath d='M1.5 6.5a4 4 0 0 1 4-4h13a4 4 0 0 1 4 4v3h-21z' fill='%23d93025'/%3E%3Cpath d='M1.5 6.5a4 4 0 0 1 4-4h1.2v7h-5.2z' fill='%23b1271b'/%3E%3Ccircle cx='12' cy='15' r='5.6' fill='%231f7a56'/%3E%3Cpath d='M9.2 15.1l2 2 3.6-4.2' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- Password gate -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-mark">E</div>
+      <h1>Elazar — To-Do List</h1>
+      <p class="login-sub">Enter password to continue</p>
+      <form id="login-form">
+        <input type="password" id="password-input" placeholder="Password" autocomplete="current-password" autofocus />
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="login-error" class="login-error"></p>
+    </div>
+  </div>
+
+  <!-- Main app -->
+  <div id="app" class="app hidden">
+    <header class="app-header">
+      <div class="header-top">
+        <div>
+          <h1>To-Do List</h1>
+          <div id="updated-label" class="updated-label"></div>
+        </div>
+        <div class="header-actions">
+          <button id="calendar-btn" class="calendar-date-btn" title="Calendar">
+            <span class="cal-hangers"><span></span><span></span></span>
+            <span class="cal-header" id="calendar-btn-month">—</span>
+            <span class="cal-body" id="calendar-btn-day">–</span>
+          </button>
+          <button id="functions-btn" class="ghost-btn" title="Quick guide to @todo functions">Functions</button>
+          <button id="show-completed-toggle" class="ghost-btn">Show completed</button>
+          <button id="logout-btn" class="ghost-btn">Log out</button>
+        </div>
+      </div>
+
+      <div class="view-tabs" role="tablist">
+        <button id="tab-all" class="view-tab active" type="button" role="tab" aria-selected="true">All items</button>
+        <button id="tab-urgent" class="view-tab view-tab-urgent" type="button" role="tab" aria-selected="false">
+          Urgent
+          <span id="urgent-count-badge" class="urgent-count-badge hidden">0</span>
+        </button>
+        <button id="tab-delegated" class="view-tab view-tab-delegated" type="button" role="tab" aria-selected="false">
+          Delegated
+          <span id="delegated-count-badge" class="urgent-count-badge delegated-count-badge hidden">0</span>
+        </button>
+        <button id="tab-archived" class="view-tab view-tab-archived" type="button" role="tab" aria-selected="false">Archived</button>
+      </div>
+
+      <div class="status-pills">
+        <div id="sync-pill" class="pill pill-lg pill-green">Live sync connected — changes save instantly</div>
+        <div class="pill-row">
+          <div id="whatsapp-pill" class="pill pill-sm pill-green">WhatsApp — checking…</div>
+          <div id="messages-pill" class="pill pill-sm pill-green">Messages — checking…</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="quick-add-card">
+      <form id="quick-add-form" class="quick-add-row">
+        <input type="text" id="quick-add-input" placeholder="Add an item… (start with EVENT: to put it on your calendar)" autocomplete="off" />
+        <button type="submit" class="primary-btn">Add</button>
+      </form>
+      <p id="event-hint" class="event-hint">Start an item with <strong>EVENT:</strong> (e.g. "EVENT: dinner with Sina Thursday 7pm") and the next automated check-in will add it to your calendar. Tap the <strong>+</strong> button below for a full editor with a link and urgent flag.</p>
+    </div>
+
+    <main id="sections-container" class="sections-container"></main>
+
+    <button id="add-fab" class="add-fab" title="Add item">+</button>
+  </div>
+
+  <!-- Add / edit modal -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="modal-title">Add item</h2>
+      <label>Section</label>
+      <input list="section-list" id="field-section" placeholder="e.g. NEEDS ACTION TODAY / THIS WEEK" />
+      <datalist id="section-list"></datalist>
+
+      <label>Title</label>
+      <textarea id="field-text" rows="2" placeholder="What needs to happen?"></textarea>
+      <p id="field-text-hint" class="field-event-hint">Start with <strong>EVENT:</strong> to have this pushed to your calendar too.</p>
+
+      <label>Note / context (optional)</label>
+      <div id="field-meta-mount"></div>
+      <p id="modal-meta-hint" class="mention-hint">Tag <strong>@word</strong> (e.g. "@context") to flag a note as something for the assistant to act on, not just a note to yourself.</p>
+
+      <label>Link (optional)</label>
+      <input type="url" id="field-link" placeholder="https://..." />
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="field-urgent" />
+        Urgent
+      </label>
+
+      <div class="modal-actions">
+        <div class="modal-delete-wrap">
+          <button id="modal-delete" class="danger-btn hidden">Delete</button>
+          <div id="modal-delete-confirm" class="delete-confirm-row hidden">
+            <span>Delete for good?</span>
+            <button id="modal-delete-no" type="button" class="ghost-btn small-btn">No</button>
+            <button id="modal-delete-yes" type="button" class="danger-btn small-btn">Yes, delete</button>
+          </div>
+        </div>
+        <div class="modal-actions-right">
+          <button id="modal-cancel" class="ghost-btn">Cancel</button>
+          <button id="modal-save" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar -->
+  <div id="calendar-overlay" class="modal-overlay hidden">
+    <div class="modal calendar-modal">
+      <div class="calendar-modal-header">
+        <button id="cal-prev" class="ghost-btn small-btn" title="Previous month">‹</button>
+        <h2 id="cal-month-label">Calendar</h2>
+        <button id="cal-next" class="ghost-btn small-btn" title="Next month">›</button>
+      </div>
+      <div class="cal-weekday-row">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <p class="cal-legend"><span class="cal-dot cal-dot-green"></span> 75%+ done &nbsp; <span class="cal-dot cal-dot-yellow"></span> 50–75% &nbsp; <span class="cal-dot cal-dot-red"></span> under 50%</p>
+
+      <div id="cal-day-panel" class="cal-day-panel hidden">
+        <button id="cal-back" class="ghost-btn small-btn">← Back to calendar</button>
+        <h3 id="cal-day-title"></h3>
+        <div id="cal-day-items"></div>
+      </div>
+
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button id="cal-close" class="ghost-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Functions guide -->
+  <div id="functions-overlay" class="modal-overlay hidden">
+    <div class="modal functions-modal">
+      <h2>@todo functions — quick guide</h2>
+      <p class="functions-intro">Type these tags inside any note on a card (or the note field when adding a new item). Tags marked <strong>Instant</strong> apply the moment you hit Enter. Tags marked <strong>Hourly</strong> need a quick read from the assistant and apply within about an hour.</p>
+
+      <div class="functions-list">
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">@todo make recurring</span><span class="functions-badge functions-badge-instant">Instant</span></div>
+          <p>Type it and a picker pops up right there — Daily, Weekly, Monthly, or Custom (every N days). Once set, the item resets back to unchecked on that schedule automatically, whether or not you'd checked it off.</p>
+        </div>
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">@todo archive when done</span><span class="functions-badge functions-badge-instant">Instant</span></div>
+          <p>The moment you check this item off, it moves itself to the <strong>Archived</strong> tab instead of sitting checked-off in your main list. Unarchive it any time from that tab.</p>
+        </div>
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">@todo delegate to [Name]</span><span class="functions-badge functions-badge-instant">Instant</span></div>
+          <p>Sends that person their own private checklist link by email right away (if they're in your Contacts with an email on file) and shows up in your <strong>Delegated</strong> tab so you can see whether they've checked it off — with a manual "Nudge" button to re-send the reminder any time.</p>
+        </div>
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">remind me in 3 days / next Tuesday / etc.</span><span class="functions-badge functions-badge-hourly">Hourly</span></div>
+          <p>Brings the item back to your attention (re-flagged, noted as recalled) at that time — whether or not it's already checked off.</p>
+        </div>
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">@todo escalate if still open ...</span><span class="functions-badge functions-badge-hourly">Hourly</span></div>
+          <p>Only fires if the item is <em>still unchecked</em> at that time — good for "make sure this actually got done" follow-ups.</p>
+        </div>
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">EVENT: ...</span><span class="functions-badge functions-badge-hourly">Hourly</span></div>
+          <p>Start an item's title with EVENT: and it gets pushed onto your Google Calendar automatically.</p>
+        </div>
+        <div class="functions-item">
+          <div class="functions-item-head"><span class="functions-tag">@context (or any other @word)</span><span class="functions-badge functions-badge-hourly">Hourly</span></div>
+          <p>General-purpose flag for "this note needs the assistant to actually do something with it," reviewed on the same hourly pass.</p>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
+          <button id="functions-close" class="ghost-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
