@@ -35,6 +35,11 @@ let state = {
 };
 let editingRecordId = null;
 let lastSuccessfulSync = null;
+// Which single note-log entry (identified by recordId + its index in that
+// item's parsed entries array) currently has an inline edit box or delete
+// confirmation open on a card. Only one at a time across the whole app —
+// mirrors how only one card's "add a note" box opens at once.
+let noteEntryEditing = null; // { recordId, index, mode: 'edit' | 'delete' } | null
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -230,7 +235,10 @@ function refreshStatusPills() {
 // not yet checked off; once checked it drops off here too, same as the
 // flag disappearing from the card).
 function urgentItems() {
-  return state.items.filter((it) => it.urgent && !it.checked && !it.archived);
+  // Delegated items live only in the Delegated tab now (see baseItems in
+  // render()) — exclude them here too so this badge count always matches
+  // what the Urgent view actually shows.
+  return state.items.filter((it) => it.urgent && !it.checked && !it.archived && !(it.delegatedToIds && it.delegatedToIds.length > 0));
 }
 
 function updateUrgentBadge() {
@@ -278,9 +286,12 @@ function render() {
   // archiving something — it gets out of the way); the Archived tab shows
   // ONLY archived items, regardless of the "Show completed" toggle, since
   // an archived item is by definition something Elazar is done with.
+  // Delegated items are ALSO excluded from "All"/"Urgent" (added 2026-08-25)
+  // — once something is delegated it lives exclusively in the Delegated
+  // tab, not duplicated in the main list too.
   const baseItems = state.view === 'archived'
     ? state.items.filter((it) => it.archived)
-    : state.items.filter((it) => !it.archived);
+    : state.items.filter((it) => !it.archived && !(it.delegatedToIds && it.delegatedToIds.length > 0));
 
   const bySection = {};
   baseItems.forEach((item) => {
@@ -630,6 +641,18 @@ function parseMetaEntries(meta) {
 function appendMetaEntry(existingMeta, text) {
   const line = NOTE_LINE_PREFIX + JSON.stringify({ t: new Date().toISOString(), x: text });
   return existingMeta ? `${existingMeta}\n${line}` : line;
+}
+
+// Reconstructs a Meta string from a parsed entries array — the inverse of
+// parseMetaEntries. Used when an existing entry is edited or deleted, so
+// the whole log can be rewritten with that one entry changed/removed while
+// every other entry's original timestamp and text is preserved exactly.
+function serializeMetaEntries(entries) {
+  return entries
+    .map((e) => (e.time
+      ? NOTE_LINE_PREFIX + JSON.stringify({ t: e.time.toISOString(), x: e.text })
+      : e.text))
+    .join('\n');
 }
 
 // Plain-text reconstruction used only for the read-only preview in the
@@ -1390,7 +1413,19 @@ function renderNoteWrap(item, container) {
       log.appendChild(toggle);
     }
 
-    visible.forEach((entry) => {
+    const startIndex = entries.length - visible.length;
+
+    visible.forEach((entry, i) => {
+      const realIndex = startIndex + i;
+      const isEditingThis = noteEntryEditing
+        && noteEntryEditing.recordId === item.recordId
+        && noteEntryEditing.index === realIndex;
+
+      if (isEditingThis && noteEntryEditing.mode === 'edit') {
+        log.appendChild(renderNoteEntryEditRow(item, entries, realIndex, container));
+        return;
+      }
+
       const row = document.createElement('div');
       row.className = 'note-entry';
       if (entry.time) {
@@ -1403,6 +1438,64 @@ function renderNoteWrap(item, container) {
       txt.className = 'note-entry-text';
       txt.innerHTML = highlightMentionsHtml(entry.text);
       row.appendChild(txt);
+
+      const actions = document.createElement('span');
+      actions.className = 'note-entry-actions';
+
+      if (isEditingThis && noteEntryEditing.mode === 'delete') {
+        const confirmLabel = document.createElement('span');
+        confirmLabel.className = 'note-entry-confirm-label';
+        confirmLabel.textContent = 'Delete this note?';
+        const yesBtn = document.createElement('button');
+        yesBtn.type = 'button';
+        yesBtn.className = 'note-entry-action-btn note-entry-action-delete';
+        yesBtn.textContent = 'Yes';
+        yesBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          noteEntryEditing = null;
+          saveNoteEntries(item, entries.filter((_, idx) => idx !== realIndex), container);
+        });
+        const noBtn = document.createElement('button');
+        noBtn.type = 'button';
+        noBtn.className = 'note-entry-action-btn';
+        noBtn.textContent = 'No';
+        noBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          noteEntryEditing = null;
+          renderNoteWrap(item, container);
+        });
+        actions.appendChild(confirmLabel);
+        actions.appendChild(yesBtn);
+        actions.appendChild(document.createTextNode(' '));
+        actions.appendChild(noBtn);
+      } else {
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'note-entry-action-btn';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          noteEntryEditing = { recordId: item.recordId, index: realIndex, mode: 'edit' };
+          renderNoteWrap(item, container);
+        });
+        const sep = document.createElement('span');
+        sep.className = 'note-entry-action-sep';
+        sep.textContent = '·';
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'note-entry-action-btn note-entry-action-delete';
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          noteEntryEditing = { recordId: item.recordId, index: realIndex, mode: 'delete' };
+          renderNoteWrap(item, container);
+        });
+        actions.appendChild(editBtn);
+        actions.appendChild(sep);
+        actions.appendChild(delBtn);
+      }
+
+      row.appendChild(actions);
       log.appendChild(row);
     });
 
@@ -1422,6 +1515,83 @@ function renderNoteWrap(item, container) {
       renderNoteWrap(item, container);
     });
     container.appendChild(addBtn);
+  }
+}
+
+// Inline edit box for one existing note-log entry — replaces just that
+// entry's row in place. Keeps the entry's original timestamp (editing
+// corrects the text, not when it was written); Enter/Save persists,
+// Escape/Cancel discards.
+function renderNoteEntryEditRow(item, entries, index, container) {
+  const wrap = document.createElement('div');
+  wrap.className = 'note-entry-edit-row';
+  wrap.addEventListener('click', (e) => e.stopPropagation());
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'note-entry-edit-input';
+  textarea.rows = 1;
+  textarea.value = entries[index].text;
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'note-entry-action-btn note-entry-save';
+  saveBtn.textContent = 'Save';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'note-entry-action-btn';
+  cancelBtn.textContent = 'Cancel';
+
+  const doSave = () => {
+    const val = textarea.value.trim();
+    if (!val) return;
+    textarea.disabled = true;
+    saveBtn.disabled = true;
+    const nextEntries = entries.map((e, i) => (i === index ? { ...e, text: val } : e));
+    noteEntryEditing = null;
+    saveNoteEntries(item, nextEntries, container);
+  };
+  const doCancel = () => {
+    noteEntryEditing = null;
+    renderNoteWrap(item, container);
+  };
+
+  saveBtn.addEventListener('click', (e) => { e.stopPropagation(); doSave(); });
+  cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); doCancel(); });
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); doCancel(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSave(); }
+  });
+
+  wrap.appendChild(textarea);
+  wrap.appendChild(saveBtn);
+  wrap.appendChild(cancelBtn);
+  setTimeout(() => {
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, 0);
+  return wrap;
+}
+
+// Persists a full rewritten entries array (after an in-place edit or
+// delete of one existing entry) back to the server as the new Meta value,
+// then re-renders from the fresh saved item. No newNoteText is sent —
+// editing/deleting an existing entry should never re-trigger @todo tag
+// detection, which only ever looks at brand-new entries (see the "action:
+// update" call in renderNoteInput, which does pass newNoteText).
+async function saveNoteEntries(item, nextEntries, container) {
+  const newMeta = serializeMetaEntries(nextEntries);
+  try {
+    const result = await api('/api/items', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'update', recordId: item.recordId, meta: newMeta }),
+    });
+    const idx = state.items.findIndex((it) => it.recordId === item.recordId);
+    if (idx !== -1) state.items[idx] = result.item;
+    render();
+  } catch (err) {
+    alert('Could not save note: ' + err.message);
+    renderNoteWrap(item, container);
   }
 }
 
