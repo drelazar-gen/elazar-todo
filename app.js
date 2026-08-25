@@ -343,11 +343,16 @@ function renderDelegatedView(container) {
     return;
   }
 
+  // An item delegated to several people/teams shows up under EACH of their
+  // groups (not just the first) so everyone's view of "what's on my plate"
+  // is complete.
   const byContact = {};
   items.forEach((item) => {
-    const name = item.delegatedToName || 'Unknown contact';
-    if (!byContact[name]) byContact[name] = [];
-    byContact[name].push(item);
+    const names = (item.delegatedToNames && item.delegatedToNames.length) ? item.delegatedToNames : [item.delegatedToName || 'Unknown contact'];
+    names.forEach((name) => {
+      if (!byContact[name]) byContact[name] = [];
+      byContact[name].push(item);
+    });
   });
 
   Object.keys(byContact).sort((a, b) => a.localeCompare(b)).forEach((name) => {
@@ -407,10 +412,29 @@ function renderDelegateStatusRow(item) {
   const wrap = document.createElement('div');
   wrap.className = 'delegate-status-row';
 
+  const names = (item.delegatedToNames && item.delegatedToNames.length)
+    ? item.delegatedToNames.join(', ')
+    : (item.delegatedToName || '');
+  if (names) {
+    const namesEl = document.createElement('span');
+    namesEl.className = 'delegate-status-names';
+    namesEl.textContent = names;
+    wrap.appendChild(namesEl);
+  }
+
+  const isGroup = (item.delegatedToIds || []).length > 1;
+
   const status = document.createElement('span');
   if (item.checked) {
     status.className = 'delegate-status delegate-status-done';
     status.textContent = '✓ Done';
+  } else if (isGroup && item.delegateMode === 'All') {
+    status.className = 'delegate-status delegate-status-pending';
+    const doneCount = (item.delegateCompletedByIds || []).length;
+    status.textContent = `${doneCount} of ${item.delegatedToIds.length} done`;
+  } else if (isGroup) {
+    status.className = 'delegate-status delegate-status-pending';
+    status.textContent = 'Awaiting any one of them';
   } else if (item.delegateInviteSent) {
     status.className = 'delegate-status delegate-status-pending';
     status.textContent = 'Sent — awaiting them';
@@ -475,14 +499,76 @@ function escapeHtml(str) {
   }[c]));
 }
 
-/* ---------------- Mention-aware notes (@context tagging) ---------------- */
-// Wraps @word tokens in a highlighted <mark> — used both for the live-typing
-// overlay field and for the read-only collapsed note display.
+/* ---------------- Mention-aware notes (@context tagging + @todo commands) ---------------- */
+// Wraps @word tokens in a highlighted <mark>, and — new as of 2026-08-25 —
+// gives recognized "@todo <command>" text its own distinct highlight (a
+// different color from a plain @mention) so it's visually obvious the
+// command function is being recognized, with the command's own argument
+// text (e.g. who it's delegated to, the recurrence, the reminder date)
+// styled separately (italic) to show it "belongs" to that command. Used
+// both for the live-typing overlay field and for the read-only collapsed
+// note display.
+//
+// Mirrors the server's TODO_FUNCTIONS/parseOneTag keyword matching — see
+// lib/airtable.js's parseOneTag for the source of truth these patterns must
+// stay in sync with. `re` matches only the KEYWORD portion of a command
+// starting at the top of its text; everything after is the command's
+// argument.
+const TODO_COMMAND_PATTERNS = [
+  /^(make\s*(?:this)?\s*recurring)\b/i,
+  /^(auto[\s-]?archive|archive\s+(?:this\s+)?when\s+done)\b/i,
+  /^(delegate\s+(?:this\s+)?to)\b/i,
+  /^(remind\s+me)\b/i,
+  /^(escalate\s+if\s+still\s+open)\b/i,
+];
+
+// cmdText is the raw text immediately following "@todo" (not yet escaped).
+// Returns HTML with the keyword in one highlight color and any trailing
+// argument text in a lighter, italicized style.
+function renderTodoCommandSpan(cmdText) {
+  const leadMatch = cmdText.match(/^\s*/);
+  const lead = leadMatch[0];
+  const rest0 = cmdText.slice(lead.length);
+  for (const re of TODO_COMMAND_PATTERNS) {
+    const m = rest0.match(re);
+    if (m) {
+      const keyword = m[1];
+      const arg = rest0.slice(keyword.length);
+      return escapeHtml(lead)
+        + `<span class="todo-cmd-keyword">@todo ${escapeHtml(keyword)}</span>`
+        + (arg ? `<span class="todo-cmd-arg">${escapeHtml(arg)}</span>` : '');
+    }
+  }
+  // "@todo" typed but no recognized keyword yet (mid-typing, or a menu
+  // pick in progress) — still highlight just the "@todo" part so there's
+  // instant feedback that the command function is active.
+  return escapeHtml(lead) + '<span class="todo-cmd-keyword">@todo</span>' + escapeHtml(rest0);
+}
+
 function highlightMentionsHtml(str) {
-  // Negative lookbehind keeps this from matching the "@domain" part of an
-  // email address (e.g. "esteek317@gmail.com") — only a genuine @tag not
-  // glued to a preceding word character counts as a mention.
-  return escapeHtml(str).replace(/(?<!\w)@(\w+)/g, '<mark class="mention">@$1</mark>');
+  const s = String(str || '');
+  let out = '';
+  let last = 0;
+  // Three alternatives, tried in order at each position:
+  //  1. {@todo ...} — a bracket-wrapped command (the separator syntax used
+  //     when a note has more than one @todo command in it).
+  //  2. @todo ...    — an unbracketed command (legacy/single-command form).
+  //  3. @word         — a plain @mention.
+  const re = /\{@todo([^{}]*)\}|@todo([^\n{}]*)|(?<!\w)@(\w+)/gi;
+  let m;
+  while ((m = re.exec(s))) {
+    out += escapeHtml(s.slice(last, m.index));
+    if (m[1] !== undefined) {
+      out += '<span class="todo-cmd-brace">{</span>' + renderTodoCommandSpan(m[1]) + '<span class="todo-cmd-brace">}</span>';
+    } else if (m[2] !== undefined) {
+      out += renderTodoCommandSpan(m[2]);
+    } else {
+      out += `<mark class="mention">@${escapeHtml(m[3])}</mark>`;
+    }
+    last = re.lastIndex;
+  }
+  out += escapeHtml(s.slice(last));
+  return out;
 }
 
 /* ---------------- Multi-entry note log ---------------- */
@@ -625,9 +711,22 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
       '</span>';
   }
 
+  // Position-aware (not a blind end-of-string append): finds the actual
+  // "@todo make recurring" command wherever it sits — including inside a
+  // {@todo ...} bracket alongside other commands — and inserts the
+  // "(every X)" suffix right after the command text itself, before any
+  // closing brace. Falls back to a plain end-of-string append only if the
+  // command text can't be found for some reason.
   function applyRecurSuffix(suffix) {
-    const val = textarea.value.replace(/\s+$/, '');
-    textarea.value = `${val} (every ${suffix})`;
+    const val = textarea.value;
+    const re = /@todo\s+make\s*(?:this)?\s*recurring\b/i;
+    const m = val.match(re);
+    if (!m) {
+      textarea.value = `${val.replace(/\s+$/, '')} (every ${suffix})`;
+    } else {
+      const insertPos = m.index + m[0].length;
+      textarea.value = `${val.slice(0, insertPos)} (every ${suffix})${val.slice(insertPos)}`;
+    }
     sync();
     textarea.focus();
     const end = textarea.value.length;
@@ -693,13 +792,17 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     functionListButtons = [];
   }
 
-  function insertAtToken(token, text) {
+  // caretOffsetFromEnd: how many characters back from the end of the
+  // inserted text to place the caret — used to land the caret just before a
+  // closing "}" (offset 1) so bracket-wrapped commands stay easy to keep
+  // typing into, instead of after it.
+  function insertAtToken(token, text, caretOffsetFromEnd) {
     const before = textarea.value.slice(0, token.start);
     const after = textarea.value.slice(token.end);
     textarea.value = before + text + after;
     sync();
     textarea.focus();
-    const pos = (before + text).length;
+    const pos = (before + text).length - (caretOffsetFromEnd || 0);
     textarea.setSelectionRange(pos, pos);
   }
 
@@ -727,10 +830,15 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
         e.stopPropagation();
         if (fn.delegateFlow) {
           inDelegateFlow = true;
-          delegateState = { token, contact: null, nudgeMode: 'manual', nudgeInterval: 'Daily', nudgeCustomDays: null };
+          delegateState = { token, contacts: [], mode: 'Any', nudgeMode: 'manual', nudgeInterval: 'Daily', nudgeCustomDays: null };
           renderContactSearchStep();
         } else {
-          insertAtToken(token, `@todo ${fn.insert}`);
+          // Bracket-wrapped so a second @todo command added later to the
+          // same note has a clear, unambiguous boundary from this one — see
+          // the highlightMentionsHtml/parseNoteTags comments for why.
+          // Caret lands just before the closing "}" so typing an argument
+          // (a reminder date, etc.) continues right where expected.
+          insertAtToken(token, `{@todo ${fn.insert}}`, 1);
           closeTodoMenu();
         }
       });
@@ -740,6 +848,11 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     menu.appendChild(list);
   }
 
+  // Multi-select: clicking a contact toggles it in/out of delegateState.contacts
+  // (shown as removable chips above the search box) rather than immediately
+  // advancing — this is what lets one item be delegated to several
+  // people/teams at once. A "Continue →" button appears once at least one
+  // contact is selected.
   async function renderContactSearchStep() {
     menu.classList.remove('hidden');
     menu.innerHTML = '';
@@ -748,8 +861,38 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
 
     const label = document.createElement('div');
     label.className = 'todo-menu-step-label';
-    label.textContent = 'Delegate to…';
+    label.textContent = 'Delegate to… (pick one or more)';
     step.appendChild(label);
+
+    const chipsRow = document.createElement('div');
+    chipsRow.className = 'todo-chip-row';
+    step.appendChild(chipsRow);
+
+    function renderChips() {
+      chipsRow.innerHTML = '';
+      delegateState.contacts.forEach((c) => {
+        const chip = document.createElement('span');
+        chip.className = 'todo-chip';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = c.name;
+        chip.appendChild(nameSpan);
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'todo-chip-remove';
+        removeBtn.setAttribute('aria-label', 'Remove ' + c.name);
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        removeBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          delegateState.contacts = delegateState.contacts.filter((sc) => sc.recordId !== c.recordId);
+          renderChips();
+          updateContinueBtn();
+        });
+        chip.appendChild(removeBtn);
+        chipsRow.appendChild(chip);
+      });
+    }
 
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
@@ -762,6 +905,21 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     const results = document.createElement('div');
     results.className = 'todo-menu-list';
     step.appendChild(results);
+
+    const continueBtn = document.createElement('button');
+    continueBtn.type = 'button';
+    continueBtn.className = 'primary-btn small-btn todo-menu-continue hidden';
+    continueBtn.textContent = 'Continue →';
+    continueBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    continueBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      renderNudgeStep();
+    });
+    function updateContinueBtn() {
+      continueBtn.classList.toggle('hidden', delegateState.contacts.length === 0);
+    }
+    step.appendChild(continueBtn);
 
     const backBtn = document.createElement('button');
     backBtn.type = 'button';
@@ -777,6 +935,8 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     step.appendChild(backBtn);
 
     menu.appendChild(step);
+    renderChips();
+    updateContinueBtn();
 
     let debounceTimer = null;
     async function runSearch(q) {
@@ -792,16 +952,23 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     function renderContactResults(q, contacts) {
       results.innerHTML = '';
       contacts.forEach((c) => {
+        const selected = delegateState.contacts.some((sc) => sc.recordId === c.recordId);
         const item = document.createElement('button');
         item.type = 'button';
-        item.className = 'todo-menu-item';
-        item.innerHTML = `<span class="todo-menu-item-label">${escapeHtml(c.name)}</span><span class="todo-menu-item-hint">${escapeHtml(c.email || c.phone || '')}</span>`;
+        item.className = 'todo-menu-item' + (selected ? ' todo-menu-item-selected' : '');
+        item.innerHTML = `<span class="todo-menu-item-label">${selected ? '✓ ' : ''}${escapeHtml(c.name)}</span><span class="todo-menu-item-hint">${escapeHtml(c.email || c.phone || '')}</span>`;
         item.addEventListener('mousedown', (e) => e.preventDefault());
         item.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          delegateState.contact = c;
-          renderNudgeStep();
+          if (selected) {
+            delegateState.contacts = delegateState.contacts.filter((sc) => sc.recordId !== c.recordId);
+          } else {
+            delegateState.contacts.push(c);
+          }
+          renderChips();
+          updateContinueBtn();
+          renderContactResults(q, contacts);
         });
         results.appendChild(item);
       });
@@ -875,8 +1042,8 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
           method: 'POST',
           body: JSON.stringify({ action: 'create', name, email: emailInput.value.trim(), phone: phoneInput.value.trim() }),
         });
-        delegateState.contact = data.contact;
-        renderNudgeStep();
+        delegateState.contacts.push(data.contact);
+        renderContactSearchStep();
       } catch (err2) {
         err.textContent = err2.message || 'Could not add contact.';
         err.classList.remove('hidden');
@@ -897,10 +1064,47 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     const step = document.createElement('div');
     step.className = 'todo-menu-step';
 
+    const namesLabel = delegateState.contacts.map((c) => c.name).join(', ');
     const label = document.createElement('div');
     label.className = 'todo-menu-step-label';
-    label.textContent = `Delegating to ${delegateState.contact.name} — reminder nudges?`;
+    label.textContent = `Delegating to ${namesLabel} — reminder nudges?`;
     step.appendChild(label);
+
+    // Completion mode only matters (and only shows) when delegated to more
+    // than one person — a single delegate has nothing to choose between.
+    if (delegateState.contacts.length > 1) {
+      const modeLabel = document.createElement('div');
+      modeLabel.className = 'todo-menu-step-label todo-mode-label';
+      modeLabel.textContent = 'How should this be completed?';
+      step.appendChild(modeLabel);
+
+      const modeRow2 = document.createElement('div');
+      modeRow2.className = 'todo-nudge-mode-row';
+      const anyBtn = document.createElement('button');
+      anyBtn.type = 'button';
+      anyBtn.className = 'todo-nudge-mode-btn' + (delegateState.mode === 'Any' ? ' active' : '');
+      anyBtn.textContent = 'Just one of them';
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'todo-nudge-mode-btn' + (delegateState.mode === 'All' ? ' active' : '');
+      allBtn.textContent = 'Each of them';
+      modeRow2.appendChild(anyBtn);
+      modeRow2.appendChild(allBtn);
+      step.appendChild(modeRow2);
+      [anyBtn, allBtn].forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()));
+      anyBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        delegateState.mode = 'Any';
+        anyBtn.classList.add('active'); allBtn.classList.remove('active');
+      });
+      allBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        delegateState.mode = 'All';
+        allBtn.classList.add('active'); anyBtn.classList.remove('active');
+      });
+    } else {
+      delegateState.mode = 'Any';
+    }
 
     const modeRow = document.createElement('div');
     modeRow.className = 'todo-nudge-mode-row';
@@ -983,14 +1187,19 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     doneBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const { token, contact, nudgeMode, nudgeInterval, nudgeCustomDays } = delegateState;
+      const { token, contacts, mode, nudgeMode, nudgeInterval, nudgeCustomDays } = delegateState;
       let nudgeText = 'manual';
       if (nudgeMode === 'auto') {
         nudgeText = (nudgeInterval === 'Custom' && nudgeCustomDays)
           ? `auto every ${nudgeCustomDays} day${nudgeCustomDays === 1 ? '' : 's'}`
           : `auto every ${nudgeInterval.toLowerCase()}`;
       }
-      insertAtToken(token, `@todo delegate to ${contact.name} (nudge: ${nudgeText})`);
+      const namesText = contacts.map((c) => c.name).join(', ');
+      const modeText = contacts.length > 1 ? ` (mode: ${mode.toLowerCase()})` : '';
+      // Bracket-wrapped, same reasoning as the plain-function inserts above
+      // — keeps this command's boundary clear if another @todo command
+      // ends up in the same note.
+      insertAtToken(token, `{@todo delegate to ${namesText}${modeText} (nudge: ${nudgeText})}`, 1);
       closeTodoMenu();
     });
     actions.appendChild(backBtn);
