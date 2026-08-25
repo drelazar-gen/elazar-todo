@@ -63,6 +63,7 @@
   .item-meta { font-size: 13px; color: var(--text-dim); margin-top: 6px; line-height: 1.45; white-space: pre-wrap; }
   .item-link { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--accent-dark); font-weight: 700; text-decoration: none; }
   .urgent-flag { display: inline-block; font-size: 10px; font-weight: 800; color: var(--urgent); margin-right: 6px; letter-spacing: 0.05em; vertical-align: middle; }
+  .group-progress { font-size: 12px; color: var(--accent-dark); font-weight: 700; margin-top: 6px; }
   .footer-note { text-align: center; color: var(--text-faint); font-size: 12px; margin-top: 30px; }
 </style>
 </head>
@@ -124,24 +125,28 @@
       }
       items
         .slice()
-        .sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1))
+        .sort((a, b) => (a.myCompleted === b.myCompleted ? 0 : a.myCompleted ? 1 : -1))
         .forEach((item) => {
           const card = document.createElement('div');
-          card.className = 'item-card' + (item.checked ? ' checked' : '') + (item.urgent && !item.checked ? ' urgent' : '');
+          card.className = 'item-card' + (item.myCompleted ? ' checked' : '') + (item.urgent && !item.myCompleted ? ' urgent' : '');
 
           const checkbox = document.createElement('input');
           checkbox.type = 'checkbox';
           checkbox.className = 'item-checkbox';
-          checkbox.checked = item.checked;
+          checkbox.checked = item.myCompleted;
           checkbox.addEventListener('change', async () => {
             checkbox.disabled = true;
             try {
-              await api('/api/delegate', {
+              const resp = await api('/api/delegate', {
                 method: 'POST',
                 body: JSON.stringify({ t: token, action: 'toggle', recordId: item.recordId, checked: checkbox.checked }),
               });
               card.classList.toggle('checked', checkbox.checked);
               card.querySelector('.item-text').style.textDecoration = checkbox.checked ? 'line-through' : 'none';
+              const progressEl = card.querySelector('.group-progress');
+              if (progressEl && resp.item) {
+                progressEl.textContent = `${resp.item.groupCompletedCount} of ${resp.item.groupTotalCount} people done`;
+              }
             } catch (err) {
               alert('Could not save: ' + err.message);
               checkbox.checked = !checkbox.checked;
@@ -174,6 +179,18 @@
             meta.className = 'item-meta';
             meta.textContent = metaText;
             body.appendChild(meta);
+          }
+
+          if (item.delegateMode === 'All' && item.isGroup) {
+            const progress = document.createElement('div');
+            progress.className = 'group-progress';
+            progress.textContent = `${item.groupCompletedCount} of ${item.groupTotalCount} people done — this checks off once everyone has completed their part.`;
+            body.appendChild(progress);
+          } else if (item.isGroup) {
+            const progress = document.createElement('div');
+            progress.className = 'group-progress';
+            progress.textContent = 'Just one of you needs to check this off.';
+            body.appendChild(progress);
           }
 
           if (item.link) {
