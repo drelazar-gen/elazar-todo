@@ -4,9 +4,15 @@
 // items delegated to them. Never expose their email/phone/token back to
 // themselves either — no reason to, and it avoids echoing the token anywhere
 // but the URL itself.
-const { getContactByToken, listItemsForContact, updateItem } = require('../lib/airtable');
+const { getContactByToken, listItemsForContact, markDelegateComplete } = require('../lib/airtable');
 
-function publicItem(it) {
+// `contactRecordId` is whichever contact is viewing (from their own token) —
+// used to compute per-person completion state for "All" mode group items,
+// without ever exposing who ELSE it's delegated to (this contact only sees
+// their own progress, not other delegates' names).
+function publicItem(it, contactRecordId) {
+  const isGroupAll = it.delegateMode === 'All' && (it.delegatedToIds || []).length > 1;
+  const completedIds = it.delegateCompletedByIds || [];
   return {
     recordId: it.recordId,
     text: it.text,
@@ -15,6 +21,14 @@ function publicItem(it) {
     section: it.section,
     checked: it.checked,
     urgent: it.urgent,
+    delegateMode: it.delegateMode || 'Any',
+    isGroup: (it.delegatedToIds || []).length > 1,
+    // For a group "All" item: whether THIS contact has completed their own
+    // copy, and how many of the group (of how many total) are done so far.
+    // For everything else, myCompleted just mirrors the shared checked state.
+    myCompleted: isGroupAll ? completedIds.includes(contactRecordId) : it.checked,
+    groupCompletedCount: isGroupAll ? completedIds.length : undefined,
+    groupTotalCount: isGroupAll ? (it.delegatedToIds || []).length : undefined,
   };
 }
 
@@ -46,7 +60,7 @@ module.exports = async (req, res) => {
 
     if (req.method === 'GET') {
       const items = await listItemsForContact(contact.recordId);
-      res.status(200).json({ ok: true, contact: { name: contact.name }, items: items.map(publicItem) });
+      res.status(200).json({ ok: true, contact: { name: contact.name }, items: items.map((it) => publicItem(it, contact.recordId)) });
       return;
     }
 
@@ -65,8 +79,11 @@ module.exports = async (req, res) => {
         res.status(403).json({ ok: false, error: 'Not your item' });
         return;
       }
-      const item = await updateItem(recordId, { checked: !!checked });
-      res.status(200).json({ ok: true, item: publicItem(item) });
+      // In a group "All" item this marks only THIS contact's own copy
+      // complete (and only flips the shared item once everyone has); for
+      // everything else it behaves exactly like the old direct toggle.
+      const item = await markDelegateComplete(recordId, contact.recordId, !!checked);
+      res.status(200).json({ ok: true, item: publicItem(item, contact.recordId) });
       return;
     }
 
