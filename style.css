@@ -609,6 +609,33 @@ mark.mention {
 }
 .mention-hint { font-size: 11.5px; color: var(--text-faint); margin: 6px 2px 0; line-height: 1.4; }
 
+/* @todo command highlighting (added 2026-08-25) — a recognized "@todo
+   <command>" keyword gets its own distinct color (reusing the existing
+   purple --event accent, so it reads as clearly different from the green
+   @mention highlight above), and any argument text that follows it (who
+   it's delegated to, the recurrence, the reminder date, etc.) is italicized
+   in a lighter version of the same color to show it "belongs" to that
+   command. Curly braces around a command (used to separate multiple @todo
+   commands in one note) get a subtle bracket treatment of their own. */
+.todo-cmd-keyword {
+  background: var(--event-bg);
+  color: var(--event);
+  border-radius: 4px;
+  padding: 0 2px;
+  font-weight: 700;
+}
+.todo-cmd-arg {
+  color: var(--event);
+  font-style: italic;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.todo-cmd-brace {
+  color: var(--event);
+  font-weight: 800;
+  opacity: 0.6;
+}
+
 .empty-state {
   text-align: center;
   color: var(--text-dim);
@@ -1056,7 +1083,44 @@ mark.mention {
   cursor: pointer;
 }
 .todo-nudge-mode-btn.active { background: var(--accent-dark); border-color: var(--accent-dark); color: white; }
+.todo-mode-label { margin-top: 2px; }
+
+/* Multi-select delegate chips — one per person/team currently picked in the
+   "Delegate to…" step. */
+.todo-chip-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px; }
+.todo-chip-row:empty { display: none; }
+.todo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--accent-bg);
+  color: var(--accent-dark);
+  border-radius: 999px;
+  padding: 4px 6px 4px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.todo-chip-remove {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--accent-dark);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.todo-chip-remove:hover { background: rgba(0, 0, 0, 0.08); }
+.todo-menu-item-selected { background: var(--accent-bg); }
+.todo-menu-item-selected .todo-menu-item-label { color: var(--accent-dark); }
+.todo-menu-continue { align-self: flex-start; }
+.todo-menu-continue.hidden { display: none; }
 
 /* Shared with the recurring-interval picker's buttons — highlights whichever
    interval is currently chosen in the nudge step. */
 .recur-picker button.recur-selected { background: var(--accent-dark); color: white; }
+
+/* Delegate status row — names of who it's delegated to, shown above the
+   status pill (updated 2026-08-25 for multi-delegate). */
+.delegate-status-names { font-size: 12.5px; font-weight: 700; color: var(--text); margin-right: 4px; }
