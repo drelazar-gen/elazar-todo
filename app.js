@@ -271,8 +271,12 @@ function populateSectionDatalist() {
 
 // Set whenever render() is asked to run while an @todo command menu
 // (including the multi-step delegate flow) is open somewhere in the list —
-// see the guard at the top of render() below. Flushed by closeTodoMenu()
-// the moment that menu actually closes.
+// see the guard at the top of render() below. Purely informational/for
+// clarity — nothing acts on it directly. The next call to render() that
+// finds no menu open (the 45s background poll, a note save, a checkbox
+// toggle, etc.) just proceeds normally and clears it. Deliberately NOT
+// force-flushed the instant the menu closes — see the long comment in
+// closeTodoMenu() for why that was tried and reverted (2026-08-26).
 let pendingRender = false;
 
 function isAnyTodoMenuOpen() {
@@ -292,6 +296,7 @@ function render() {
     pendingRender = true;
     return;
   }
+  pendingRender = false;
 
   const container = $('#sections-container');
   container.innerHTML = '';
@@ -837,12 +842,21 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     inDelegateFlow = false;
     delegateState = null;
     functionListButtons = [];
-    // The menu is now actually gone from the DOM — safe to run any render()
-    // that got deferred while it was open (see the guard in render()).
-    if (pendingRender) {
-      pendingRender = false;
-      render();
-    }
+    // Deliberately do NOT flush a deferred render() here, even though the
+    // menu is now closed. Every function in this menu (delegate, remind,
+    // escalate, archive, recurring) works by inserting command text into
+    // the note textarea and then closing the menu — the note itself is
+    // NOT saved yet at that point (saving only happens when the textarea's
+    // Enter-key handler runs, in renderNoteInput). If we rebuilt the DOM
+    // right here, we'd wipe out that just-inserted, still-unsaved text
+    // before the user ever got to press Enter — which is exactly what was
+    // silently breaking delegate (and every other @todo function) after
+    // the render-guard fix below was first added (2026-08-26). Leaving
+    // pendingRender set is fine: isAnyTodoMenuOpen() now correctly reports
+    // false, so the very next natural render() (the 45s background poll,
+    // the Enter-key save, a checkbox toggle, etc.) picks it up within
+    // seconds — no explicit flush needed, and nothing gets destroyed
+    // out from under unsaved input.
   }
 
   // caretOffsetFromEnd: how many characters back from the end of the
