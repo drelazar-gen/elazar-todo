@@ -559,6 +559,7 @@ const TODO_COMMAND_PATTERNS = [
   /^(delegate\s+(?:this\s+)?to)\b/i,
   /^(remind\s+me)\b/i,
   /^(escalate\s+if\s+still\s+open)\b/i,
+  /^(event)\b/i,
 ];
 
 // cmdText is the raw text immediately following "@todo" (not yet escaped).
