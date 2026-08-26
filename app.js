@@ -716,7 +716,7 @@ const TODO_FUNCTIONS = [
   { key: 'recurring', label: 'Make recurring', hint: 'Reset back to unchecked on a schedule', insert: 'make recurring' },
   { key: 'archive', label: 'Archive when done', hint: 'Move to Archived once checked off', insert: 'archive when done' },
   { key: 'delegate', label: 'Delegate to…', hint: 'Send to someone as their own checklist item', insert: 'delegate to', delegateFlow: true },
-  { key: 'remind', label: 'Remind me…', hint: 'e.g. "remind me in 3 days" — whether or not it\'s checked off', insert: 'remind me in ' },
+  { key: 'remind', label: 'Remind me…', hint: 'e.g. "remind me in 3 days" or "remind me on Friday" — whether or not it\'s checked off', insert: 'remind me ' },
   { key: 'escalate', label: 'Escalate if still open…', hint: 'Flags it again only if it\'s still unchecked by then', insert: 'escalate if still open ' },
   { key: 'event', label: 'Put on the calendar…', hint: 'e.g. "@todo event Thursday 7pm dinner with Sina" — the next check-in adds it to your calendar', insert: 'event ' },
 ];
