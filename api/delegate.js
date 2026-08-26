@@ -4,7 +4,7 @@
 // items delegated to them. Never expose their email/phone/token back to
 // themselves either — no reason to, and it avoids echoing the token anywhere
 // but the URL itself.
-const { getContactByToken, listItemsForContact, markDelegateComplete } = require('../lib/airtable');
+const { getContactByToken, listItemsForContact, markDelegateComplete, addDelegateMessage } = require('../lib/airtable');
 
 // `contactRecordId` is whichever contact is viewing (from their own token) —
 // used to compute per-person completion state for "All" mode group items,
@@ -65,24 +65,34 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
-      const { action, recordId, checked } = body;
-      if (action !== 'toggle' || !recordId) {
+      const { action, recordId } = body;
+      if (!recordId || (action !== 'toggle' && action !== 'message')) {
         res.status(400).json({ ok: false, error: 'Unknown action' });
         return;
       }
-      // Security check: only allow toggling an item actually delegated to
+      // Security check: only allow acting on an item actually delegated to
       // THIS contact — never trust recordId alone, a guessed/other id must
-      // not be toggleable through this token.
+      // not be reachable through this token.
       const theirs = await listItemsForContact(contact.recordId);
       const owns = theirs.some((it) => it.recordId === recordId);
       if (!owns) {
         res.status(403).json({ ok: false, error: 'Not your item' });
         return;
       }
-      // In a group "All" item this marks only THIS contact's own copy
-      // complete (and only flips the shared item once everyone has); for
-      // everything else it behaves exactly like the old direct toggle.
-      const item = await markDelegateComplete(recordId, contact.recordId, !!checked);
+
+      if (action === 'toggle') {
+        // In a group "All" item this marks only THIS contact's own copy
+        // complete (and only flips the shared item once everyone has); for
+        // everything else it behaves exactly like the old direct toggle.
+        const item = await markDelegateComplete(recordId, contact.recordId, !!body.checked);
+        res.status(200).json({ ok: true, item: publicItem(item, contact.recordId) });
+        return;
+      }
+
+      // action === 'message' — a free-text note sent back to Elazar, e.g. a
+      // question or status update. Appended to the item's history and
+      // emailed to Elazar so it doesn't sit unseen.
+      const item = await addDelegateMessage(recordId, contact.recordId, contact.name, body.message);
       res.status(200).json({ ok: true, item: publicItem(item, contact.recordId) });
       return;
     }
