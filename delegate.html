@@ -65,6 +65,49 @@
   .urgent-flag { display: inline-block; font-size: 10px; font-weight: 800; color: var(--urgent); margin-right: 6px; letter-spacing: 0.05em; vertical-align: middle; }
   .group-progress { font-size: 12px; color: var(--accent-dark); font-weight: 700; margin-top: 6px; }
   .footer-note { text-align: center; color: var(--text-faint); font-size: 12px; margin-top: 30px; }
+  .message-toggle {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--accent-dark);
+    font-weight: 700;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .message-form { margin-top: 10px; display: none; }
+  .message-form.open { display: block; }
+  .message-form textarea {
+    width: 100%;
+    min-height: 60px;
+    resize: vertical;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    padding: 9px 11px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+  }
+  .message-form textarea:focus { outline: none; border-color: var(--accent); }
+  .message-form-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .message-send-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .message-send-btn:disabled { opacity: 0.6; cursor: default; }
+  .message-status { font-size: 12.5px; color: var(--text-dim); }
+  .message-status.sent { color: var(--accent-dark); font-weight: 700; }
+  .message-status.error { color: var(--urgent); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -203,10 +246,76 @@
             body.appendChild(link);
           }
 
+          body.appendChild(renderMessageBlock(item));
+
           card.appendChild(checkbox);
           card.appendChild(body);
           list.appendChild(card);
         });
+    }
+
+    // Builds the "Send Elazar a message" toggle + form for one item card.
+    // Kept separate from renderItems for readability — it's the same idea
+    // for every card, just parameterized by which item it's attached to.
+    function renderMessageBlock(item) {
+      const wrap = document.createElement('div');
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'message-toggle';
+      toggle.textContent = '💬 Message Elazar about this';
+
+      const form = document.createElement('div');
+      form.className = 'message-form';
+
+      const textarea = document.createElement('textarea');
+      textarea.placeholder = 'Ask a question, give a status update, or say why you can\'t do this one…';
+      textarea.maxLength = 2000;
+
+      const actions = document.createElement('div');
+      actions.className = 'message-form-actions';
+
+      const sendBtn = document.createElement('button');
+      sendBtn.type = 'button';
+      sendBtn.className = 'message-send-btn';
+      sendBtn.textContent = 'Send';
+
+      const status = document.createElement('span');
+      status.className = 'message-status';
+
+      toggle.addEventListener('click', () => {
+        form.classList.toggle('open');
+        if (form.classList.contains('open')) textarea.focus();
+      });
+
+      sendBtn.addEventListener('click', async () => {
+        const message = textarea.value.trim();
+        if (!message) return;
+        sendBtn.disabled = true;
+        status.className = 'message-status';
+        status.textContent = 'Sending…';
+        try {
+          await api('/api/delegate', {
+            method: 'POST',
+            body: JSON.stringify({ t: token, action: 'message', recordId: item.recordId, message }),
+          });
+          textarea.value = '';
+          status.className = 'message-status sent';
+          status.textContent = 'Sent ✓ Elazar will see it.';
+        } catch (err) {
+          status.className = 'message-status error';
+          status.textContent = 'Could not send: ' + err.message;
+        }
+        sendBtn.disabled = false;
+      });
+
+      actions.appendChild(sendBtn);
+      actions.appendChild(status);
+      form.appendChild(textarea);
+      form.appendChild(actions);
+      wrap.appendChild(toggle);
+      wrap.appendChild(form);
+      return wrap;
     }
 
     async function init() {
