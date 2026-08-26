@@ -269,7 +269,30 @@ function populateSectionDatalist() {
   datalist.innerHTML = allSections.map((s) => `<option value="${escapeHtml(s)}"></option>`).join('');
 }
 
+// Set whenever render() is asked to run while an @todo command menu
+// (including the multi-step delegate flow) is open somewhere in the list —
+// see the guard at the top of render() below. Flushed by closeTodoMenu()
+// the moment that menu actually closes.
+let pendingRender = false;
+
+function isAnyTodoMenuOpen() {
+  return !!document.querySelector('#sections-container .todo-menu:not(.hidden)');
+}
+
 function render() {
+  // A @todo menu (function picker, contact search, delegate mode/nudge
+  // steps) lives inside the same item-card DOM that render() unconditionally
+  // tears down and rebuilds below. Doing that mid-flow — most commonly from
+  // the 45s backgroundRefresh poll firing while someone is still filling out
+  // a delegation — destroyed the open menu out from under them: it would
+  // flash/disappear and reappear, and clicks meant for it would land on
+  // whatever fresh element the rebuild put in that same screen position
+  // instead (2026-08-26 fix). Defer the rebuild until the menu closes.
+  if (isAnyTodoMenuOpen()) {
+    pendingRender = true;
+    return;
+  }
+
   const container = $('#sections-container');
   container.innerHTML = '';
 
@@ -689,6 +712,7 @@ const TODO_FUNCTIONS = [
   { key: 'delegate', label: 'Delegate to…', hint: 'Send to someone as their own checklist item', insert: 'delegate to', delegateFlow: true },
   { key: 'remind', label: 'Remind me…', hint: 'e.g. "remind me in 3 days" — whether or not it\'s checked off', insert: 'remind me in ' },
   { key: 'escalate', label: 'Escalate if still open…', hint: 'Flags it again only if it\'s still unchecked by then', insert: 'escalate if still open ' },
+  { key: 'event', label: 'Put on the calendar…', hint: 'e.g. "@todo event Thursday 7pm dinner with Sina" — the next check-in adds it to your calendar', insert: 'event ' },
 ];
 
 // Finds the "@todo…" token the caret is actively sitting inside/at the end
@@ -813,6 +837,12 @@ function createMentionField({ placeholder, rows, recurPicker, todoMenu } = {}) {
     inDelegateFlow = false;
     delegateState = null;
     functionListButtons = [];
+    // The menu is now actually gone from the DOM — safe to run any render()
+    // that got deferred while it was open (see the guard in render()).
+    if (pendingRender) {
+      pendingRender = false;
+      render();
+    }
   }
 
   // caretOffsetFromEnd: how many characters back from the end of the
